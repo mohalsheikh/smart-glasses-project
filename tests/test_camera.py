@@ -2,15 +2,15 @@ import cv2
 
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
-    print("❌ Cannot access camera")
+    print("Cannot access camera")
     exit()
 
-print("✅ Camera opened! Press Q to quit.")
+print("Camera opened! Press Q to quit.")
 
 while True:
     ret, frame = cap.read()
     if not ret:
-        print("⚠️ Failed to grab frame")
+        print("Failed to grab frame")
         break
     cv2.imshow("Test Camera", frame)
 

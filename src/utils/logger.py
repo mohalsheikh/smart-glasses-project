@@ -1,9 +1,10 @@
 """
-Logger utility for error handling
+Very lightweight console logger.
 """
 
-import datetime
+from datetime import datetime
 
-def log(message, level="INFO"):
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"[{timestamp}] [{level}] {message}")
+
+def log(msg: str, level: str = "INFO"):
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{ts}] [{level}] {msg}")
