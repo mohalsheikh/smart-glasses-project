@@ -9,5 +9,3 @@ while True:
     # Press Q to quit window
     if cv.waitKey(1) & 0xFF == ord("q"):
         break
-
-del camera_handler
