@@ -80,14 +80,16 @@ class ObjectDetector:
     def _tensor_to_numpy_array(obj):
         return obj.cpu().numpy() if obj is not None else None
 
-    # returns tuple (detections, frame)
+    # returns tuple (detections, frame).
+    # if annotate is True, frame is the annotated frame, otherwise it's the original frame.
     def detect(self, frame: np.ndarray, annotate: bool = False):
+        # attempt to track objects in the frame. if tracking fails, raise an error
         try:
             track_result = self._track(frame)
         except Exception as e:
             raise RuntimeError(f"Tracking failed with exception: {e}")
         
-        track_result_boxes = getattr(track_result, 'boxes', None)
+        track_result_boxes = getattr(track_result, 'boxes', None) # get the boxes attribute from the track result
 
         if track_result_boxes is None: # if there is no boxes attribute, return empty list and original frame
             return [], frame
@@ -103,6 +105,8 @@ class ObjectDetector:
         id = self._tensor_to_numpy_array(getattr(track_result_boxes, 'id', None)) # track IDs, if available
         label = [self.model.names.get(c) for c in cls] # class labels
 
+        # comphrehension to create list of detections. 
+        # we format detections as dictionaries with keys: label, confidence, bbox, center, track_id
         detections = [
             {
             "label": label[i],
@@ -114,4 +118,6 @@ class ObjectDetector:
             for i in range(len(xyxy))
         ]
 
+        # always return detections.
+        # if annotate is true, return annotated frame, otherwise return original frame
         return detections, track_result.plot() if annotate else frame
