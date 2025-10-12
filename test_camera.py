@@ -6,8 +6,9 @@ camera_handler = CameraHandler()
 object_detector = ObjectDetector()
 
 while True:
-    camera_handler.capture_and_show_frame(window_name="burger")
-    print(object_detector._track(frame=camera_handler.capture_frame())[0].boxes)
+    frame = camera_handler.capture_frame()
+    _, annotated = object_detector.detect(frame, annotate=True)
+    camera_handler.show_image(annotated)
 
     # Press Q to quit window
     if cv.waitKey(1) & 0xFF == ord("q"):

@@ -2,10 +2,12 @@
 Advanced YOLOv8 Object Detector with tracking and annotated output.
 """
 
-# TODO look at detect method from our demo code, learn how it works, see what we want to do in this actual implementation...
+# TODO look at detect method from our demo code, learn how it works, see what we want to do in this actual implementation... 
+# also maybe that last valueerror should be a different error type
 
 from ultralytics import YOLO
 import src.utils.config as config
+import numpy as np
 
 class ObjectDetector:
     # initializes the detector with specified parameters or defaults from config.
@@ -57,10 +59,12 @@ class ObjectDetector:
         try:
             self.model = YOLO(model_name)
         except Exception as e:
-            raise ValueError(f"Failed to load model '{model_name}' with exception: {e}\nMake sure that you specify a valid file path to a YOLO model.")
+            raise RuntimeError(f"Failed to load model '{model_name}' with exception: {e}\nMake sure that you specify a valid file path to a YOLO model.")
 
-    # wrapper for the model's track method with the parameters set in __init__
-    def _track(self, frame, persist: bool = True):
+    # wrapper for the model's track method with the parameters set in __init__.
+    # the yolo track function, when given one frame, returns a list of one result every time if it is successful,
+    # so we just return the first element of that list
+    def _track(self, frame: np.ndarray, persist: bool = True):
         return self.model.track(
             source = frame,
             persist = persist,
@@ -68,5 +72,46 @@ class ObjectDetector:
             iou = self.iou,
             imgsz = self.imgsz,
             tracker = self.tracker,
-            max_det = self.max_det
-        )
+            max_det = self.max_det,
+            verbose = False
+        )[0]
+    
+    @staticmethod
+    def _tensor_to_numpy_array(obj):
+        return obj.cpu().numpy() if obj is not None else None
+
+    # returns tuple (detections, frame)
+    def detect(self, frame: np.ndarray, annotate: bool = False):
+        try:
+            track_result = self._track(frame)
+        except Exception as e:
+            raise RuntimeError(f"Tracking failed with exception: {e}")
+        
+        track_result_boxes = getattr(track_result, 'boxes', None)
+
+        if track_result_boxes is None: # if there is no boxes attribute, return empty list and original frame
+            return [], frame
+        
+        xyxy = self._tensor_to_numpy_array(track_result_boxes.xyxy) # bounding box coordinates
+
+        if xyxy.size == 0: # if no detections, return empty list and original frame
+            return [], frame
+
+        center = (xyxy[:, :2] + xyxy[:, 2:]) / 2
+        conf = self._tensor_to_numpy_array(track_result_boxes.conf).astype(float) # confidence scores
+        cls = self._tensor_to_numpy_array(track_result_boxes.cls).astype(int) # class indices
+        id = self._tensor_to_numpy_array(getattr(track_result_boxes, 'id', None)) # track IDs, if available
+        label = [self.model.names.get(c) for c in cls] # class labels
+
+        detections = [
+            {
+            "label": label[i],
+            "confidence": conf[i],
+            "bbox": tuple(xyxy[i]), # convert numpy array to list for easier serialization
+            "center": tuple(center[i]),
+            "track_id": int(id[i]) if id is not None and i < len(id) else None
+            } 
+            for i in range(len(xyxy))
+        ]
+
+        return detections, track_result.plot() if annotate else frame

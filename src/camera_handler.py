@@ -35,9 +35,8 @@ class CameraHandler:
         ret, frame = self.cap.read() # attempt to read a frame from the camera
 
         if not ret: # if reading the frame failed...
-            # Log the error in console and return None.
-            print("Failed to capture frame.")
-            return None
+            return None # return None.
+        
         return frame # otherwise, return the captured frame
     
     def show_image(self, image, window_name="Camera"):
