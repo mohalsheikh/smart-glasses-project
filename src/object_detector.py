@@ -2,9 +2,6 @@
 Advanced YOLOv8 Object Detector with tracking and annotated output.
 """
 
-# TODO look at detect method from our demo code, learn how it works, see what we want to do in this actual implementation... 
-# also maybe that last valueerror should be a different error type
-
 from ultralytics import YOLO
 import src.utils.config as config
 import numpy as np
