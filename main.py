@@ -1,6 +1,7 @@
 """
 Main entry point for Smart Glasses Project
 Coordinates all components together
+Created by Mohammed
 """
 
 from ultralytics import YOLO

@@ -1,5 +1,7 @@
 """
 Configuration file for constants
+Created by Mohammed
+Edited by Ethan
 """
 
 CAMERA_INDEX: int = 0
