@@ -1,5 +1,6 @@
 """
 Advanced YOLOv8 Object Detector with tracking and annotated output.
+Created by Ethan
 """
 
 from ultralytics import YOLO

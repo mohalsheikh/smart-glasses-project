@@ -1,5 +1,6 @@
 """
 Handles camera input and preprocessing
+Created by Ethan
 """
 
 import cv2 as cv
