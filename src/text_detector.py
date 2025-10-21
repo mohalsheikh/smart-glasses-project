@@ -9,7 +9,7 @@ import easyocr
 import matplotlib.pyplot as plt
 
 # read image
-image_path = "C:\\Repos\\CAPSTONE\\smart-glasses-project\\Test_img1.png"  # replace with your image path
+image_path = "Test_img1.png"  # replace with your image path
 image = cv2.imread(image_path)
 
 # instance text detector
