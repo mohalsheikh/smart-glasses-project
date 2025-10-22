@@ -1,5 +1,6 @@
 """
 Text-detection using a basic EasyOCR implementation with preprocessing
+OPTIMIZED VERSION for better performance
 Created by Eric Leon
 """
 
@@ -8,20 +9,47 @@ import easyocr
 import matplotlib.pyplot as plt
 import os
 import numpy as np
+import time
 from src.utils.config import DEFAULT_OCR_CONFIDENCE_THRESHOLD
 from src.utils.preprocessing import sharpen_image, bgr_to_gray, gray_to_bgr
 
-def preprocess_for_ocr(image, show_steps=False):
+# Global reader to initialize once
+_reader = None
+
+def get_reader():
+    """Initialize EasyOCR reader once and reuse"""
+    global _reader
+    if _reader is None:
+        print("🔧 Initializing EasyOCR reader (one-time setup)...")
+        start = time.time()
+        _reader = easyocr.Reader(['en'], gpu=False)
+        print(f"✅ EasyOCR ready! (took {time.time()-start:.1f}s)")
+    return _reader
+
+def resize_image_if_large(image, max_dimension=1920):
+    """
+    Resize image if it's too large to speed up processing
+    """
+    height, width = image.shape[:2]
+    
+    if max(height, width) > max_dimension:
+        scale = max_dimension / max(height, width)
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+        resized = cv2.resize(image, (new_width, new_height), interpolation=cv2.INTER_AREA)
+        print(f"📐 Resized from {width}x{height} to {new_width}x{new_height} for faster processing")
+        return resized, scale
+    
+    return image, 1.0
+
+def preprocess_for_ocr(image, show_steps=False, fast_mode=True):
     """
     Apply preprocessing pipeline to improve OCR accuracy
     
-    Steps:
-    1. Sharpen image (using existing function from preprocessing.py)
-    2. Convert to grayscale
-    3. Apply denoising
-    4. Apply adaptive thresholding
-    5. Apply morphological operations
+    Args:
+        fast_mode: If True, skip denoising (faster but slightly less accurate)
     """
+    start_time = time.time()
     original = image.copy()
     
     # Step 1: Sharpen using existing function
@@ -30,8 +58,13 @@ def preprocess_for_ocr(image, show_steps=False):
     # Step 2: Convert to grayscale using existing function
     gray = bgr_to_gray(sharpened)
     
-    # Step 3: Denoise
-    denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
+    # Step 3: Denoise (OPTIONAL - skip in fast mode)
+    if fast_mode:
+        print("⚡ Fast mode: Skipping denoising")
+        denoised = gray
+    else:
+        print("🔧 Applying denoising (slow)...")
+        denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
     
     # Step 4: Adaptive threshold for better text contrast
     thresh = cv2.adaptiveThreshold(
@@ -47,7 +80,9 @@ def preprocess_for_ocr(image, show_steps=False):
     # Convert back to BGR for display/processing using existing function
     processed = gray_to_bgr(morph)
     
-    # Show preprocessing steps if requested
+    print(f"✅ Preprocessing complete! (took {time.time()-start_time:.2f}s)")
+    
+    # Show preprocessing steps if requested (non-blocking)
     if show_steps:
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
         
@@ -64,7 +99,7 @@ def preprocess_for_ocr(image, show_steps=False):
         axes[0, 2].axis('off')
         
         axes[1, 0].imshow(denoised, cmap='gray')
-        axes[1, 0].set_title('4. Denoised')
+        axes[1, 0].set_title('4. Denoised' if not fast_mode else '4. Denoised (skipped)')
         axes[1, 0].axis('off')
         
         axes[1, 1].imshow(thresh, cmap='gray')
@@ -76,9 +111,16 @@ def preprocess_for_ocr(image, show_steps=False):
         axes[1, 2].axis('off')
         
         plt.tight_layout()
+        # Replace non-blocking show with blocking show so this is the only window
         plt.show()
     
     return processed
+
+# Configuration
+FAST_MODE = False  # Set to False for better accuracy but slower
+SHOW_PREPROCESSING_STEPS = True  # Set to True to see preprocessing
+MAX_IMAGE_SIZE = 1920  # Resize larger images for speed
+SHOW_FINAL_RESULTS = False  # NEW: show original/result figure
 
 # read image with error handling
 image_path = "Test_img4.jpg"  # replace with your image path
@@ -94,6 +136,7 @@ if not os.path.exists(image_path):
     exit(1)
 
 # Load image
+total_start = time.time()
 image = cv2.imread(image_path)
 
 # Verify image loaded successfully
@@ -103,22 +146,24 @@ if image is None:
     exit(1)
 
 print(f"✅ Image loaded successfully: {image_path}")
-print(f"📐 Image size: {image.shape[1]}x{image.shape[0]}")
+print(f"📐 Original image size: {image.shape[1]}x{image.shape[0]}")
+
+# Resize if image is too large
+image, scale_factor = resize_image_if_large(image, MAX_IMAGE_SIZE)
 
 # Apply preprocessing
-print("🔧 Applying preprocessing (using src.utils.preprocessing functions)...")
-preprocessed_image = preprocess_for_ocr(image, show_steps=True)
-print("✅ Preprocessing complete!")
+print(f"🔧 Applying preprocessing {'(FAST MODE)' if FAST_MODE else '(QUALITY MODE)'}...")
+preprocessed_image = preprocess_for_ocr(image, show_steps=SHOW_PREPROCESSING_STEPS, fast_mode=FAST_MODE)
 
-# instance text detector
-print("🔧 Initializing EasyOCR reader...")
-reader = easyocr.Reader(['en'], gpu=False)
-print("✅ EasyOCR ready!")
+# Get reader (initializes once)
+reader = get_reader()
 
 # detect text on PREPROCESSED image
 print("🔍 Detecting text on preprocessed image...")
+ocr_start = time.time()
 text_ = reader.readtext(preprocessed_image)
-print(f"📝 Found {len(text_)} text region(s)")
+ocr_time = time.time() - ocr_start
+print(f"📝 Found {len(text_)} text region(s) (OCR took {ocr_time:.2f}s)")
 
 threshold = DEFAULT_OCR_CONFIDENCE_THRESHOLD
 
@@ -163,22 +208,26 @@ for i, t in enumerate(text_):
     else:
         print(f" ❌ REJECTED (below threshold: {threshold})")
 
+total_time = time.time() - total_start
+
 print(f"\n{'='*60}")
 print(f"📊 SUMMARY: {detections_above_threshold}/{len(text_)} detections above threshold ({threshold})")
+print(f"⏱️  Total processing time: {total_time:.2f}s")
+print(f"    - OCR inference: {ocr_time:.2f}s ({ocr_time/total_time*100:.0f}%)")
 print(f"{'='*60}\n")
 
 # Display result
-fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+if SHOW_FINAL_RESULTS:
+    fig, axes = plt.subplots(1, 2, figsize=(16, 8))
+    axes[0].imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    axes[0].set_title('Original Image', fontsize=14)
+    axes[0].axis('off')
 
-axes[0].imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-axes[0].set_title('Original Image', fontsize=14)
-axes[0].axis('off')
+    axes[1].imshow(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB))
+    axes[1].set_title(f'Text Detection Results - {detections_above_threshold} detections', fontsize=14)
+    axes[1].axis('off')
 
-axes[1].imshow(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB))
-axes[1].set_title(f'Text Detection Results - {detections_above_threshold} detections', fontsize=14)
-axes[1].axis('off')
-
-plt.tight_layout()
-plt.show()
+    plt.tight_layout()
+    plt.show()
 
 print("✅ Detection complete!")
