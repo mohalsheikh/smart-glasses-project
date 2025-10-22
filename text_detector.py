@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from src.utils.config import DEFAULT_OCR_CONFIDENCE_THRESHOLD
 
 # read image
-image_path = "Test_img1.png"  # replace with your image path
+image_path = "Test_img2.jpg"  # replace with your image path
 image = cv2.imread(image_path)
 
 # instance text detector

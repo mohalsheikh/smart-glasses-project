@@ -19,7 +19,7 @@ DEFAULT_TRACKER: str = "bytetrack.yaml"
 DEFAULT_MAX_DETECTIONS: int = 100
 
 # OCR settings
-DEFAULT_CONFIDENCE_OCR_THRESHOLD: float = 0.25
+DEFAULT_OCR_CONFIDENCE_THRESHOLD: float = 0.25
 
 # Preprocessing settings
 GAUSSIAN_BLUR_KERNEL_SIZE: tuple = (5, 5)
