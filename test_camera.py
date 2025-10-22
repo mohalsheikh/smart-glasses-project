@@ -1,4 +1,5 @@
 import cv2 as cv
+
 from src.camera_handler import CameraHandler
 from src.object_detector import ObjectDetector
 # Ethan and Mohammed worked on this file and might edit in future by Nathan
