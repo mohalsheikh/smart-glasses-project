@@ -7,9 +7,9 @@ Edited by Ethan
 import numpy as np
 
 # camera settings
-CAMERA_INDEX: int = 0
-FRAME_WIDTH: int = 640
-FRAME_HEIGHT: int = 480
+DEFAULT_CAMERA_INDEX: int = 0
+DEFAULT_FRAME_WIDTH: int = 640
+DEFAULT_FRAME_HEIGHT: int = 480
 
 # YOLO settings
 DEFAULT_MODEL_NAME: str = "yolov8n.pt"
