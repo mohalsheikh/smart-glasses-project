@@ -7,9 +7,10 @@ Created by Eric Leon
 import cv2
 import easyocr
 import matplotlib.pyplot as plt
+from src.utils.config import DEFAULT_OCR_CONFIDENCE_THRESHOLD
 
 # read image
-image_path = "Test_img1.png"  # replace with your image path
+image_path = "Test_img2.jpg"  # replace with your image path
 image = cv2.imread(image_path)
 
 # instance text detector
@@ -18,7 +19,7 @@ reader = easyocr.Reader(['en'], gpu=False)
 # detect text on image
 text_ = reader.readtext(image)
 
-threshold = 0.25
+threshold = DEFAULT_OCR_CONFIDENCE_THRESHOLD
 # draw bbox and text
 
 for t in text_:
