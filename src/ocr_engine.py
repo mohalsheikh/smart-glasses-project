@@ -1,5 +1,6 @@
 """
 OCR using EasyOCR
+Created by Eric and will work on it in future by Eric
 """
 
 class OCREngine:

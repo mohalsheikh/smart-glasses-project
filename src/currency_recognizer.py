@@ -1,5 +1,6 @@
 """
 Currency recognition system
+Created by Mohammed and will work on it in future by Mohammed
 """
 
 class CurrencyRecognizer:

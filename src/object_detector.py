@@ -12,7 +12,7 @@ class ObjectDetector:
     def __init__(
             self,
             model_name: str = config.DEFAULT_MODEL_NAME, # path to the YOLO model
-            conf: float = config.DEFAULT_CONFIDENCE_THRESHOLD, # confidence threshold
+            conf: float = config.DEFAULT_YOLO_CONFIDENCE_THRESHOLD, # confidence threshold
             iou: float = config.DEFAULT_IOU_THRESHOLD, # IoU threshold
             imgsz: int = config.FRAME_WIDTH if config.FRAME_WIDTH > config.FRAME_HEIGHT else config.FRAME_HEIGHT, # image size for model input
             tracker: str = config.DEFAULT_TRACKER, # the tracker we're using
