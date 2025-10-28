@@ -1,31 +1,44 @@
-"""
-Configuration file for constants
-Created by Mohammed
-Edited by Ethan
-"""
+import os
+import torch
 
-import numpy as np
+#
+# Global project config for paths and runtime behavior.
+#
 
-# camera settings
-DEFAULT_CAMERA_INDEX: int = 0
-DEFAULT_FRAME_WIDTH: int = 640
-DEFAULT_FRAME_HEIGHT: int = 480
+# Root of the project (this file is in smart-glasses-project/src/utils/)
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
-# YOLO settings
-DEFAULT_MODEL_NAME: str = "yolov8n.pt"
-DEFAULT_YOLO_CONFIDENCE_THRESHOLD: float = 0.35
-DEFAULT_IOU_THRESHOLD: float = 0.45
-DEFAULT_TRACKER: str = "bytetrack.yaml"
-DEFAULT_MAX_DETECTIONS: int = 100
+# Path to the trained YOLO weights you want to run on device
+YOLO_WEIGHTS_PATH = os.path.join(
+    PROJECT_ROOT,
+    "models",
+    "yolo_glasses_v2.pt",  # <-- this is your fine-tuned 22-class model
+)
 
-# OCR settings
-DEFAULT_OCR_CONFIDENCE_THRESHOLD: float = 0.25
+# Runtime device selection
+# Try Apple MPS first (Metal / M2), else CPU fallback.
+if torch.backends.mps.is_available():
+    DEVICE = "mps"
+else:
+    DEVICE = "cpu"
 
-# Preprocessing settings
-GAUSSIAN_BLUR_KERNEL_SIZE: tuple = (5, 5)
-GAUSSIAN_BLUR_SIGMA_X: float = 0
-GAUSSIAN_BLUR_SIGMA_Y: float = 0
+# Minimum confidence for reporting a detection (you can tweak this)
+DEFAULT_CONF_THRESHOLD = 0.3
 
-SHARP = np.array([[0, -1, 0], # Image processing kernel for sharpening
-                  [-1, 5,-1],  
-                  [0, -1, 0]])
+# Max number of detections per frame to speak/announce/etc
+MAX_DETECTIONS_PER_FRAME = 10
+
+# Optional: list of classes we care about MOST for spoken feedback/navigation
+PRIORITY_CLASSES = [
+    "person",
+    "car",
+    "stop sign",
+    "traffic light",
+    "stairs",
+    "bottle",
+    "mobile phone",
+    "chair",
+    "table",
+    "toothbrush",
+    "pen",
+]

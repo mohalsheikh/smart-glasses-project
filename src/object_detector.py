@@ -1,121 +1,168 @@
-"""
-Advanced YOLOv8 Object Detector with tracking and annotated output.
-Created by Ethan
-"""
-
+import cv2
+import torch
 from ultralytics import YOLO
-import src.utils.config as config
-import numpy as np
+from typing import List, Dict, Any, Optional, Tuple
+
+from src.utils.config import (
+    YOLO_WEIGHTS_PATH,
+    DEVICE,
+    DEFAULT_CONF_THRESHOLD,
+    MAX_DETECTIONS_PER_FRAME,
+)
 
 class ObjectDetector:
-    # initializes the detector with specified parameters or defaults from config.
+    """
+    Wrapper around your fine-tuned YOLO model.
+    Handles:
+    - loading weights
+    - running inference
+    - returning clean structured detections
+    - drawing boxes (optional)
+    """
+
     def __init__(
-            self,
-            model_name: str = config.DEFAULT_MODEL_NAME, # path to the YOLO model
-            conf: float = config.DEFAULT_YOLO_CONFIDENCE_THRESHOLD, # confidence threshold
-            iou: float = config.DEFAULT_IOU_THRESHOLD, # IoU threshold
-            imgsz: int = config.DEFAULT_FRAME_WIDTH if config.DEFAULT_FRAME_WIDTH > config.DEFAULT_FRAME_HEIGHT else config.DEFAULT_FRAME_HEIGHT, # image size for model input
-            tracker: str = config.DEFAULT_TRACKER, # the tracker we're using
-            max_det: int = config.DEFAULT_MAX_DETECTIONS # maximum number of objects to detect in a frame
-        ):
+        self,
+        weights_path: str = YOLO_WEIGHTS_PATH,
+        device: str = DEVICE,
+        conf_threshold: float = DEFAULT_CONF_THRESHOLD,
+    ):
+        self.device = device
+        self.conf_threshold = conf_threshold
 
-        # parameters cannot be None and must be of the types specified in the function signature.
-        # the ifs below ensure that the parameters are not None by raising an error if they are.
+        print(f"[ObjectDetector] Loading YOLO model from {weights_path}")
+        print(f"[ObjectDetector] Using device: {device}")
 
-        # error if no path to model is provided
-        if model_name is None:
-            raise ValueError("Model name must be set.")
-        
-        # error if confidence threshold is not provided
-        if conf is None:
-           raise ValueError("Confidence threshold must be set.")
-        
-        # error if iou threshold is not provided
-        if iou is None:
-            raise ValueError("IoU threshold must be set.")
-        
-        # error if image size is not provided
-        if imgsz is None:
-            raise ValueError("Image size must be set.")
+        self.model = YOLO(weights_path)
 
-        # error if tracker config is not provided
-        if tracker is None:
-            raise ValueError("Tracker config must be set.")
+        # model.names is {class_id: "classname"}
+        self.class_names = self.model.names
 
-        # error if max detections is not provided
-        if max_det is None:
-            raise ValueError("Max detections must be set.")
-        
-        # store parameters
-        self.conf = conf
-        self.iou = iou
-        self.imgsz = imgsz
-        self.tracker = tracker
-        self.max_det = max_det
+    def detect(self, frame_bgr) -> List[Dict[str, Any]]:
+        """
+        Run detection on one frame (BGR OpenCV frame).
+        Returns a list of dict detections:
+        {
+            "class_id": int,
+            "class_name": str,
+            "confidence": float,
+            "bbox_xyxy": [x1, y1, x2, y2],
+            "bbox_xywh": [cx, cy, w, h]
+        }
+        """
+        results = self.model.predict(
+            source=frame_bgr,
+            device=self.device,
+            conf=self.conf_threshold,
+            verbose=False,
+        )
 
-        # attempt to load the model. if loading fails, raise an error
-        try:
-            self.model = YOLO(model_name)
-        except Exception as e:
-            raise RuntimeError(f"Failed to load model '{model_name}' with exception: {e}\nMake sure that you specify a valid file path to a YOLO model.")
+        r = results[0]
 
-    # wrapper for the model's track method with the parameters set in __init__.
-    # the yolo track function, when given one frame, returns a list of one result every time if it is successful,
-    # so we just return the first element of that list
-    def _track(self, frame: np.ndarray, persist: bool = True):
-        return self.model.track(
-            source = frame,
-            persist = persist,
-            conf = self.conf,
-            iou = self.iou,
-            imgsz = self.imgsz,
-            tracker = self.tracker,
-            max_det = self.max_det,
-            verbose = False
-        )[0]
-    
-    @staticmethod
-    def _tensor_to_numpy_array(obj):
-        return obj.cpu().numpy() if obj is not None else None
+        boxes_xyxy = r.boxes.xyxy.detach().cpu().numpy()  # (N, 4)
+        boxes_xywh = r.boxes.xywh.detach().cpu().numpy()  # (N, 4) cx,cy,w,h
+        scores = r.boxes.conf.detach().cpu().numpy()      # (N,)
+        class_ids = r.boxes.cls.detach().cpu().numpy().astype(int)  # (N,)
 
-    # returns tuple (detections, frame).
-    # if annotate is True, frame is the annotated frame, otherwise it's the original frame.
-    def detect(self, frame: np.ndarray, annotate: bool = False):
-        # attempt to track objects in the frame. if tracking fails, raise an error
-        try:
-            track_result = self._track(frame)
-        except Exception as e:
-            raise RuntimeError(f"Tracking failed with exception: {e}")
-        
-        track_result_boxes = getattr(track_result, 'boxes', None) # get the boxes attribute from the track result
+        detections = []
+        for i in range(len(class_ids)):
+            cid = class_ids[i]
+            conf = float(scores[i])
+            name = self.class_names.get(cid, f"class_{cid}")
+            det = {
+                "class_id": cid,
+                "class_name": name,
+                "confidence": conf,
+                "bbox_xyxy": boxes_xyxy[i].tolist(),
+                "bbox_xywh": boxes_xywh[i].tolist(),
+            }
+            detections.append(det)
 
-        if track_result_boxes is None: # if there is no boxes attribute, return empty list and original frame
-            return [], frame
-        
-        xyxy = self._tensor_to_numpy_array(track_result_boxes.xyxy) # bounding box coordinates
+        # sort high → low confidence
+        detections.sort(key=lambda d: d["confidence"], reverse=True)
 
-        if xyxy.size == 0: # if no detections, return empty list and original frame
-            return [], frame
+        # trim to not spam downstream audio, etc.
+        return detections[:MAX_DETECTIONS_PER_FRAME]
 
-        center = (xyxy[:, :2] + xyxy[:, 2:]) / 2
-        conf = self._tensor_to_numpy_array(track_result_boxes.conf).astype(float) # confidence scores
-        cls = self._tensor_to_numpy_array(track_result_boxes.cls).astype(int) # class indices
-        id = self._tensor_to_numpy_array(getattr(track_result_boxes, 'id', None)) # track IDs, if available
-        label = [self.model.names.get(c) for c in cls] # class labels
+    def draw_detections(
+        self,
+        frame_bgr,
+        detections: List[Dict[str, Any]],
+        box_color: Tuple[int, int, int] = (0, 255, 0),
+    ):
+        """
+        Draw boxes + labels ON the frame, in-place.
+        Returns the same frame for convenience.
+        """
+        for det in detections:
+            x1, y1, x2, y2 = det["bbox_xyxy"]
+            label = f'{det["class_name"]} {det["confidence"]:.2f}'
 
-        # comphrehension to create list of detections. 
-        # we format detections as dictionaries with keys: label, confidence, bbox, center, track_id
-        detections = [
-            {
-            "label": label[i],
-            "confidence": conf[i],
-            "bbox": tuple(xyxy[i]), # convert numpy array to list for easier serialization
-            "center": tuple(center[i]),
-            "track_id": int(id[i]) if id is not None and i < len(id) else None
-            } 
-            for i in range(len(xyxy))
-        ]
+            # box
+            cv2.rectangle(
+                frame_bgr,
+                (int(x1), int(y1)),
+                (int(x2), int(y2)),
+                box_color,
+                2,
+            )
 
-        # always return detections.
-        # if annotate is true, return annotated frame, otherwise return original frame
-        return detections, track_result.plot() if annotate else frame
+            # label bg
+            cv2.rectangle(
+                frame_bgr,
+                (int(x1), int(y1) - 20),
+                (int(x1) + 200, int(y1)),
+                box_color,
+                -1,
+            )
+
+            # label text
+            cv2.putText(
+                frame_bgr,
+                label,
+                (int(x1) + 5, int(y1) - 5),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 0, 0),
+                1,
+                cv2.LINE_AA,
+            )
+
+        return frame_bgr
+
+
+if __name__ == "__main__":
+    # quick self-test if you run:
+    # python src/object_detector.py
+    import time
+
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        print("ERROR: could not open camera 0, trying 1...")
+        cap = cv2.VideoCapture(1)
+
+    detector = ObjectDetector()
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Camera read failed, exiting.")
+            break
+
+        dets = detector.detect(frame)
+        frame_drawn = detector.draw_detections(frame, dets)
+
+        cv2.imshow("ObjectDetector self-test", frame_drawn)
+
+        # simple log of top detection
+        if len(dets) > 0:
+            top = dets[0]
+            print(
+                f"[{time.strftime('%H:%M:%S')}] {top['class_name']} {top['confidence']:.2f} "
+                f"at {top['bbox_xyxy']}"
+            )
+
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
