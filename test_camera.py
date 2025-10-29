@@ -4,7 +4,7 @@ from src.camera_handler import CameraHandler
 from src.object_detector import ObjectDetector
 # Ethan and Mohammed worked on this file and might edit in future by Nathan
 camera_handler = CameraHandler()
-object_detector = ObjectDetector()
+object_detector = ObjectDetector() # change the parameters here if needed to use the yolo_glasses_v2 instead
 
 while True:
     frame = camera_handler.capture_frame()
