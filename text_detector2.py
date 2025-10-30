@@ -10,7 +10,7 @@ import os
 from src.utils.config import DEFAULT_OCR_CONFIDENCE_THRESHOLD
 
 # read image with error handling
-image_path = "Test_img4.jpg"  # replace with your image path
+image_path = "Test_img2.jpg"  # replace with your image path
 
 # Check if file exists
 if not os.path.exists(image_path):

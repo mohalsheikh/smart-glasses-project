@@ -46,3 +46,5 @@ def sharpen_image(image):
 # Apply Gaussian blur to an image using predefined settings.
 def gaussian_blur(image):
     return cv.GaussianBlur(image, config.GAUSSIAN_BLUR_KERNEL_SIZE, config.GAUSSIAN_BLUR_SIGMA_X, config.GAUSSIAN_BLUR_SIGMA_Y)
+
+# Deskew an image such that what we presume to be the largest block of 
