@@ -1,6 +1,6 @@
 """
 Text-detection using a basic EasyOCR implementation
-Created by Eric Leon
+Created by Ethan Walden
 """
 
 import cv2 as cv
@@ -24,6 +24,10 @@ if not os.path.exists(image_path):
 image = cv.imread(image_path)
 image = cv.resize(image, (640, 480))
 
+image = image[80:393, 30:620]
+
+# zoom in for better visualization
+
 # Verify image loaded successfully
 if image is None:
     raise ValueError(f"Error: Failed to load image from '{image_path}'")
@@ -36,10 +40,23 @@ edges = cv.Canny(gray, 50, 100)
 # now we want to find the contours in the edged image.
 contours, _ = cv.findContours(edges, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
 
-# if we found any contours, we can assume the image is skewed and needs deskewing.
+# if we found any contours, we want to look for the largest one; this is likely to surround the object of interest.
+# sometimes, in real situations, there may be something obscuring the edges around the object, like the hand and clip in test image 2.
+# that's why we use convex hulls to close gaps in the contours before finding the largest one.
 if contours:
-    # we assume the largest contour by area is around the poster. 
-    largest_contour = max(contours, key=cv.contourArea)
+    # before we find the largest contour we want to convex hull all contours to close gaps.
+    hulls = [cv.convexHull(c) for c in contours]
+
+    # we assume the largest contour by area is around the poster.
+    largest_contour = max(hulls, key=cv.contourArea)
+
+    # get the minimum area rectangle that bounds the largest contour
+    rect = cv.minAreaRect(largest_contour)
+
+    # draw the rectangle on a copy of the original image for visualization
+    cv.polylines(image, [cv.boxPoints(rect).astype(int)], isClosed=True, color=(0, 255, 0), thickness=2)
+    cv.drawContours(image, hulls, -1, (255, 0, 0), 2)
+    cv.drawContours(image, [largest_contour], -1, (0, 0, 255), 2)
 
 while cv.waitKey(1) & 0xFF != ord("q"):
-    cam.show_image(edges)
+    cam.show_image(image)
