@@ -29,3 +29,8 @@ GAUSSIAN_BLUR_SIGMA_Y: float = 0
 SHARP = np.array([[0, -1, 0], # Image processing kernel for sharpening
                   [-1, 5,-1],  
                   [0, -1, 0]])
+
+# Text detection settings
+
+# objects our model detects that may reasonably have text
+OCR_WHITELIST = ('backpack', 'skateboard', 'surfboard', 'bottle', 'wine glass', 'cup', 'bowl', 'tv', 'laptop', 'refrigerator', 'book', 'clock') 
