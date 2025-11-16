@@ -4,13 +4,16 @@ OPTIMIZED VERSION for better performance
 Created by Eric Leon
 """
 
+import os
+import time
+from typing import Tuple
+
 import cv2
 import easyocr
 import matplotlib.pyplot as plt
-import os
 import numpy as np
-import time
-from src.utils.config import DEFAULT_OCR_CONFIDENCE_THRESHOLD
+
+import src.utils.config as config
 from src.utils.preprocessing import sharpen_image, bgr_to_gray, gray_to_bgr
 
 # Global reader to initialize once
@@ -26,7 +29,7 @@ def get_reader():
         print(f"✅ EasyOCR ready! (took {time.time()-start:.1f}s)")
     return _reader
 
-def resize_image_if_large(image, max_dimension=1920):
+def resize_image_if_large(image: np.ndarray, max_dimension: int = config.MAX_IMAGE_DIMENSION) -> Tuple[np.ndarray, float]:
     """
     Resize image if it's too large to speed up processing
     """
@@ -66,23 +69,17 @@ def preprocess_for_ocr(image, show_steps=False, fast_mode=True):
         print("🔧 Applying denoising (slow)...")
         denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
     
-    # Step 4: Adaptive threshold for better text contrast
+    # Create threshold/morph ONLY for visualization
     thresh = cv2.adaptiveThreshold(
         denoised, 255, 
         cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
         cv2.THRESH_BINARY, 11, 2
     )
     
-    # Step 5: Morphological operations to reduce noise
     kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (2, 2))
     morph = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
     
-    # Convert back to BGR for display/processing using existing function
-    processed = gray_to_bgr(morph)
-    
-    print(f"✅ Preprocessing complete! (took {time.time()-start_time:.2f}s)")
-    
-    # Show preprocessing steps if requested (non-blocking)
+    # Show steps with morph for education
     if show_steps:
         fig, axes = plt.subplots(2, 3, figsize=(15, 10))
         
@@ -102,28 +99,29 @@ def preprocess_for_ocr(image, show_steps=False, fast_mode=True):
         axes[1, 0].set_title('4. Denoised' if not fast_mode else '4. Denoised (skipped)')
         axes[1, 0].axis('off')
         
-        axes[1, 1].imshow(thresh, cmap='gray')
-        axes[1, 1].set_title('5. Thresholded')
-        axes[1, 1].axis('off')
+        # axes[1, 1].imshow(thresh, cmap='gray')
+        # axes[1, 1].set_title('5. Thresholded')
+        # axes[1, 1].axis('off')
         
-        axes[1, 2].imshow(morph, cmap='gray')
-        axes[1, 2].set_title('6. Morphological')
-        axes[1, 2].axis('off')
+        # axes[1, 2].imshow(morph, cmap='gray')
+        # axes[1, 2].set_title('6. Morphological')
+        # axes[1, 2].axis('off')
         
         plt.tight_layout()
         # Replace non-blocking show with blocking show so this is the only window
         plt.show()
     
-    return processed
+    # Return grayscale for OCR (NOT the binary morph!)
+    return denoised  # ← Changed from 'gray_to_bgr(morph)'
 
 # Configuration
-FAST_MODE = False  # Set to False for better accuracy but slower
+DEFAULT_FAST_MODE = False  # Set to False for better accuracy but slower
 SHOW_PREPROCESSING_STEPS = True  # Set to True to see preprocessing
-MAX_IMAGE_SIZE = 1920  # Resize larger images for speed
+MAX_IMAGE_DIMENSION = 1920  # Resize larger images for speed (use an UPPER_SNAKE name)
 SHOW_FINAL_RESULTS = False  # NEW: show original/result figure
 
 # read image with error handling
-image_path = "Test_img4.jpg"  # replace with your image path
+image_path = "Test_img2.jpg"  # replace with your image path
 
 # Check if file exists
 if not os.path.exists(image_path):
@@ -149,11 +147,11 @@ print(f"✅ Image loaded successfully: {image_path}")
 print(f"📐 Original image size: {image.shape[1]}x{image.shape[0]}")
 
 # Resize if image is too large
-image, scale_factor = resize_image_if_large(image, MAX_IMAGE_SIZE)
+image, scale_factor = resize_image_if_large(image, MAX_IMAGE_DIMENSION)
 
 # Apply preprocessing
-print(f"🔧 Applying preprocessing {'(FAST MODE)' if FAST_MODE else '(QUALITY MODE)'}...")
-preprocessed_image = preprocess_for_ocr(image, show_steps=SHOW_PREPROCESSING_STEPS, fast_mode=FAST_MODE)
+print(f"🔧 Applying preprocessing {'(FAST MODE)' if DEFAULT_FAST_MODE else '(QUALITY MODE)'}...")
+preprocessed_image = preprocess_for_ocr(image, show_steps=SHOW_PREPROCESSING_STEPS, fast_mode=DEFAULT_FAST_MODE)
 
 # Get reader (initializes once)
 reader = get_reader()
@@ -165,7 +163,7 @@ text_ = reader.readtext(preprocessed_image)
 ocr_time = time.time() - ocr_start
 print(f"📝 Found {len(text_)} text region(s) (OCR took {ocr_time:.2f}s)")
 
-threshold = DEFAULT_OCR_CONFIDENCE_THRESHOLD
+threshold = config.DEFAULT_OCR_CONFIDENCE_THRESHOLD
 
 # draw bbox and text on ORIGINAL image for better visualization
 result_image = image.copy()
