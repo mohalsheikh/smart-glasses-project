@@ -1,0 +1,142 @@
+# src/utils/object_description.py
+
+from typing import List, Dict, Any, Optional
+import src.utils.config as config
+
+# Ignore noisy labels
+IGNORE_LABELS = {
+    "Clothing", "Human arm", "Human hair", "Human leg", "Human body",
+    "Human head", "Human ear", "Human eye", "Human mouth", "Human nose",
+    "Human hand", "Human foot", "Human face", "Fashion accessory"
+}
+
+# Merge similar labels
+MERGE_LABELS = {
+    "Human face": "person", "Man": "person", "Woman": "person",
+    "Boy": "person", "Girl": "person", "Person": "person",
+    "Laptop computer": "laptop", "Computer keyboard": "keyboard",
+    "Computer mouse": "mouse", "Mobile phone": "phone",
+    "Cellular telephone": "phone", "Telephone": "phone",
+    "Television": "TV", "Drink": "beverage",
+}
+
+# Priority objects
+PRIORITY_LABELS = {
+    "person", "Door", "Door handle", "Stairs", "Chair", "Table",
+    "Car", "Bus", "Truck", "Bicycle", "Motorcycle",
+    "Traffic light", "Traffic sign", "Stop sign",
+    "Laptop", "laptop", "phone", "Mug", "Bottle",
+    "Toilet", "Sink", "Bed", "Couch"
+}
+
+
+def normalize_label(label: str) -> Optional[str]:
+    """Normalize labels - fast version."""
+    if label in IGNORE_LABELS:
+        return None
+    if label in MERGE_LABELS:
+        return MERGE_LABELS[label]
+    return label
+
+
+def direction_from_center(center, frame_width: int) -> Optional[str]:
+    """Get direction from center position."""
+    if center is None or frame_width <= 0:
+        return None
+
+    x = center[0]
+    left_thresh = frame_width / 3
+    right_thresh = 2 * frame_width / 3
+
+    if x < left_thresh:
+        return "on your left"
+    elif x > right_thresh:
+        return "on your right"
+    else:
+        return "in front of you"
+
+
+def add_indefinite_article(label: str) -> str:
+    """Add a/an to label."""
+    if not label:
+        return label
+    first_letter = label[0].lower()
+    return f"an {label}" if first_letter in "aeiou" else f"a {label}"
+
+
+def get_confidence_threshold(label: str) -> float:
+    """Get confidence threshold based on object type."""
+    if label in config.SMALL_OBJECTS:
+        return config.CONFIDENCE_BY_CATEGORY["small_objects"]
+    elif label in PRIORITY_LABELS:
+        return config.CONFIDENCE_BY_CATEGORY["priority_objects"]
+    else:
+        return config.CONFIDENCE_BY_CATEGORY["general_objects"]
+
+
+def summarize_detections(
+    detections: List[Dict[str, Any]],
+    frame_width: int,
+    max_items: int | None = None,
+) -> str:
+    """
+    Fast summary - no distance estimation.
+    """
+    if max_items is None:
+        max_items = config.MAX_SPEECH_ITEMS
+
+    # Filter by adaptive confidence
+    filtered = []
+    for d in detections:
+        raw_label = d.get("label", "object")
+        cleaned = normalize_label(raw_label)
+        if cleaned is None:
+            continue
+
+        conf = float(d.get("confidence", 0.0))
+        required_conf = get_confidence_threshold(cleaned)
+
+        if conf >= required_conf:
+            filtered.append({
+                "label": cleaned,
+                "confidence": conf,
+                "center": d.get("center"),
+            })
+
+    if not filtered:
+        return "I don't see any objects clearly."
+
+    # Sort by confidence
+    filtered.sort(key=lambda x: x["confidence"], reverse=True)
+
+    # Priority first
+    priority = [d for d in filtered if d["label"] in PRIORITY_LABELS]
+    non_priority = [d for d in filtered if d["label"] not in PRIORITY_LABELS]
+
+    combined = priority + non_priority
+    combined = combined[:max_items]
+
+    # Build phrases
+    phrases: list[str] = []
+    for d in combined:
+        label = d["label"]
+        center = d["center"]
+        direction = direction_from_center(center, frame_width)
+
+        obj_phrase = add_indefinite_article(label)
+
+        if direction:
+            phrases.append(f"{obj_phrase} {direction}")
+        else:
+            phrases.append(obj_phrase)
+
+    if not phrases:
+        return "I don't see any objects clearly."
+
+    # Natural sentence
+    if len(phrases) == 1:
+        return f"I see {phrases[0]}."
+    elif len(phrases) == 2:
+        return f"I see {phrases[0]} and {phrases[1]}."
+    else:
+        return f"I see {', '.join(phrases[:-1])}, and {phrases[-1]}."
