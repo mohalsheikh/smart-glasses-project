@@ -50,9 +50,9 @@ p = psutil.Process(os.getpid()); print(p.memory_info().rss)
 
 # Performance flags
 FAST_MODE = True               # True = skip denoising (faster). Set False for higher quality.
-MAX_IMAGE_SIDE = 1280         # Resize largest side to this if original is bigger.
+MAX_IMAGE_DIMENSION = 1280         # Resize largest side to this if original is bigger.
 
-def resize_image_if_large(image, max_dim: int = MAX_IMAGE_SIDE):
+def resize_image_if_large(image, max_dim: int = MAX_IMAGE_DIMENSION):
     """Resize image if the largest side exceeds max_dim. Returns (image, scale)."""
     h, w = image.shape[:2]
     if max(h, w) > max_dim:
@@ -76,7 +76,7 @@ if image is None:
     exit(1)
 
 # Resize early to reduce work/memory (important for large photos)
-image, _ = resize_image_if_large(image, MAX_IMAGE_SIDE)
+image, _ = resize_image_if_large(image, MAX_IMAGE_DIMENSION)
 
 # instance text detector (init once if reused elsewhere)
 reader = easyocr.Reader(['en'], gpu=False)
