@@ -39,7 +39,17 @@ from src.safety.guidance_engine import GuidanceEngine
 
 from src.document_reader import DocumentReader
 
-from src.utils.telemetry import TelemetryLogger, set_global_logger
+# Enhanced telemetry imports
+from src.utils.telemetry import (
+    TelemetryLogger,
+    set_global_logger,
+    log_voice,
+    log_safety,
+    log_ai,
+    log_speech,
+    log_error,
+    log_system_health,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +233,30 @@ def _simple_guidance_type(msg: str) -> str:
     return "other"
 
 
+def _extract_direction_from_msg(msg: str) -> Optional[str]:
+    """Extract direction from a guidance/obstacle message."""
+    t = (msg or "").lower()
+    if "left" in t:
+        return "left"
+    if "right" in t:
+        return "right"
+    if "ahead" in t or "front" in t:
+        return "ahead"
+    return None
+
+
+def _extract_distance_from_msg(msg: str) -> Optional[str]:
+    """Extract distance from a guidance/obstacle message."""
+    t = (msg or "").lower()
+    if "very close" in t:
+        return "very_close"
+    if "close" in t:
+        return "close"
+    if "near" in t:
+        return "near"
+    return None
+
+
 class MainController:
     def __init__(self):
         self.camera = CameraHandler()
@@ -268,7 +302,7 @@ class MainController:
         self._describe_lock = threading.Lock()
         self._obstacle_lock = threading.Lock()
 
-        # Single “TTS lane” so nothing overlaps audio
+        # Single "TTS lane" so nothing overlaps audio
         self._tts_lock = threading.Lock()
 
         self._voice_busy = False
@@ -467,6 +501,7 @@ class MainController:
         meta = dict(meta or {})
         meta.setdefault("text_len", len(sentence))
         meta.setdefault("words", len(sentence.split()))
+        source = meta.get("source", "unknown")
 
         try:
             with self._tts_lock:
@@ -482,9 +517,18 @@ class MainController:
                 if self.telemetry is not None:
                     rid = meta.get("req_id", "")
                     self.telemetry.log_event("tts_end", {"req_id": rid, "tts_ms": float(dur_ms), **meta})
+                
+                # Log structured speech telemetry
+                log_speech(
+                    text_len=len(sentence),
+                    duration_ms=dur_ms,
+                    source=source,
+                    queued=False,
+                )
 
         except Exception as e:
             print(f"⚠️ Speech error: {e!r}")
+            log_error(e, context="speak_blocking")
             if self.telemetry is not None:
                 rid = meta.get("req_id", "")
                 self.telemetry.log_event("tts_error", {"req_id": rid, "err": repr(e), **meta})
@@ -497,6 +541,7 @@ class MainController:
         meta = dict(meta or {})
         meta.setdefault("text_len", len(sentence))
         meta.setdefault("words", len(sentence.split()))
+        source = meta.get("source", "unknown")
 
         acquired = self._tts_lock.acquire(blocking=False)
         if not acquired:
@@ -519,11 +564,20 @@ class MainController:
             if self.telemetry is not None:
                 rid = meta.get("req_id", "")
                 self.telemetry.log_event("tts_end", {"req_id": rid, "tts_ms": float(dur_ms), **meta})
+            
+            # Log structured speech telemetry
+            log_speech(
+                text_len=len(sentence),
+                duration_ms=dur_ms,
+                source=source,
+                queued=True,
+            )
 
             return True
 
         except Exception as e:
             print(f"⚠️ Speech error: {e!r}")
+            log_error(e, context="speak_if_free")
             if self.telemetry is not None:
                 rid = meta.get("req_id", "")
                 self.telemetry.log_event("tts_error", {"req_id": rid, "err": repr(e), **meta})
@@ -650,13 +704,24 @@ class MainController:
                 local_sentence = summarize_detections(detections_snapshot, frame_width=frame_width)
 
                 try:
+                    ai_t0 = time.perf_counter()
                     answer = self.assistant.handle_query(
                         "describe the environment",
                         frame=frame_snapshot,
                         detections=detections_snapshot,
                     )
+                    ai_ms = (time.perf_counter() - ai_t0) * 1000.0
+                    
+                    # Log AI operation
+                    log_ai(
+                        operation="scene_describe",
+                        latency_ms=ai_ms,
+                        success=True,
+                        result_len=len(answer or ""),
+                    )
                 except Exception as e:
                     print(f"❌ AssistantBrain describe error: {e!r}")
+                    log_error(e, context="describe_scene")
                     answer = local_sentence
 
                 self._speak_blocking(answer, meta={"req_id": req_id, "source": "describe"})
@@ -705,6 +770,7 @@ class MainController:
                 dur_ms = (time.perf_counter() - t0) * 1000.0
                 words = len((msg or "").split())
                 chars = len(msg or "")
+                success = bool(chars > 0 and "don't have a clear view" not in (msg or "").lower())
 
                 if self.telemetry is not None:
                     self.telemetry.log_event(
@@ -715,12 +781,23 @@ class MainController:
                             "latency_ms": float(dur_ms),
                             "words": int(words),
                             "chars": int(chars),
-                            "success": bool(chars > 0 and "don't have a clear view" not in (msg or "").lower()),
+                            "success": success,
                         },
                     )
+                
+                # Log structured AI telemetry for OCR
+                log_ai(
+                    operation="ocr_read",
+                    latency_ms=dur_ms,
+                    success=success,
+                    mode=mode,
+                    result_len=chars,
+                )
 
                 self._speak_blocking(msg, meta={"req_id": req_id, "source": "ocr", "mode": mode})
 
+            except Exception as e:
+                log_error(e, context="handle_read_page")
             finally:
                 self._set_reading(False)
 
@@ -821,6 +898,7 @@ class MainController:
             
         except Exception as e:
             print(f"❌ Error saving scene: {e}")
+            log_error(e, context="save_scene_memory")
             import traceback
             traceback.print_exc()
             self._speak_blocking("Sorry, couldn't save the scene.")
@@ -836,9 +914,13 @@ class MainController:
 
         def worker():
             t_all0 = time.perf_counter()
+            command_type = "unknown"
             try:
                 if self.telemetry is not None:
                     self.telemetry.log_event("voice_start", {"req_id": req_id})
+                
+                # Log voice start
+                log_voice(req_id=req_id, phase="start")
 
                 # listen/transcribe timing
                 t0 = time.perf_counter()
@@ -850,6 +932,15 @@ class MainController:
                         "voice_transcribed",
                         {"req_id": req_id, "listen_ms": float(listen_ms), "text_len": len(text or "")},
                     )
+                
+                # Log voice transcription
+                log_voice(
+                    req_id=req_id,
+                    phase="transcribed",
+                    listen_ms=listen_ms,
+                    text_len=len(text or ""),
+                    success=bool(text),
+                )
 
                 if not text:
                     self._speak_blocking("I didn't catch that. Try again.", meta={"req_id": req_id, "source": "voice"})
@@ -859,6 +950,7 @@ class MainController:
                 if self._is_toggle_command(text):
                     msg = self._run_toggle_command(text)
                     if msg:
+                        command_type = "toggle_warnings"
                         if self.telemetry is not None:
                             self.telemetry.log_event("voice_command", {"req_id": req_id, "cmd": "toggle_warnings"})
                         self._speak_blocking(msg, meta={"req_id": req_id, "source": "voice"})
@@ -868,6 +960,7 @@ class MainController:
                 if self._is_read_mode_command(text):
                     msg = self._run_read_mode_command(text)
                     if msg:
+                        command_type = "read_mode"
                         if self.telemetry is not None:
                             self.telemetry.log_event("voice_command", {"req_id": req_id, "cmd": "read_mode"})
                         self._speak_blocking(msg, meta={"req_id": req_id, "source": "voice"})
@@ -875,6 +968,7 @@ class MainController:
 
                 # 3) Document commands (protected reading mode)
                 if frame_snapshot is not None and self._is_doc_command(text):
+                    command_type = "document"
                     self._set_reading(True)
                     try:
                         if hasattr(self.ocr, "set_mode"):
@@ -903,6 +997,15 @@ class MainController:
                                         "cmd_text": (text or "")[:120],
                                     },
                                 )
+                            
+                            # Log AI operation for OCR
+                            log_ai(
+                                operation="ocr_doc_cmd",
+                                latency_ms=doc_ms,
+                                success=True,
+                                mode=self._get_read_mode(),
+                                result_len=chars,
+                            )
 
                             if getattr(config, "OCR_DEBUG_PRINT", False):
                                 msg = f"[{self._get_read_mode()}] {msg}"
@@ -913,6 +1016,7 @@ class MainController:
                         self._set_reading(False)
 
                 # 4) Otherwise route to assistant
+                command_type = "brain"
                 tbrain0 = time.perf_counter()
                 try:
                     answer = self.assistant.handle_query(
@@ -920,10 +1024,20 @@ class MainController:
                         frame=frame_snapshot,
                         detections=detections_snapshot,
                     )
+                    brain_ms = (time.perf_counter() - tbrain0) * 1000.0
+                    
+                    # Log AI operation
+                    log_ai(
+                        operation="assistant_query",
+                        latency_ms=brain_ms,
+                        success=True,
+                        result_len=len(answer or ""),
+                    )
                 except Exception as e:
                     print(f"❌ AssistantBrain.handle_query error: {e!r}")
+                    log_error(e, context="assistant_handle_query")
                     answer = "Something went wrong while answering."
-                brain_ms = (time.perf_counter() - tbrain0) * 1000.0
+                    brain_ms = (time.perf_counter() - tbrain0) * 1000.0
 
                 if self.telemetry is not None:
                     self.telemetry.log_event(
@@ -937,10 +1051,23 @@ class MainController:
 
                 self._speak_blocking(answer, meta={"req_id": req_id, "source": "voice"})
 
+            except Exception as e:
+                log_error(e, context="voice_interaction")
             finally:
+                total_ms = (time.perf_counter() - t_all0) * 1000.0
+                
                 if self.telemetry is not None:
-                    total_ms = (time.perf_counter() - t_all0) * 1000.0
                     self.telemetry.log_event("voice_end", {"req_id": req_id, "total_ms": float(total_ms)})
+                
+                # Log voice completion
+                log_voice(
+                    req_id=req_id,
+                    phase="complete",
+                    total_ms=total_ms,
+                    command_type=command_type,
+                    success=True,
+                )
+                
                 self._end_voice()
 
         threading.Thread(target=worker, daemon=True).start()
@@ -1021,11 +1148,14 @@ class MainController:
                     return
 
                 depth_map = None
+                depth_quality = 0.0
                 if mode == "depth" and getattr(config, "DEPTH_ENABLED", False):
                     try:
                         depth_map = self.depth_estimator.estimate(frame_snapshot, frame_idx=frame_idx)
+                        depth_quality = 0.8  # Assume good quality if successful
                     except Exception as e:
                         print(f"⚠️ DepthEstimator error: {e!r}")
+                        log_error(e, context="depth_estimator")
                         depth_map = None
 
                 msg = self.obstacle_layer.update(
@@ -1049,6 +1179,16 @@ class MainController:
                             "msg_preview": (msg or "")[:120],
                         },
                     )
+                
+                # Log structured safety telemetry
+                log_safety(
+                    event_type="obstacle",
+                    severity=2 if "very close" in msg.lower() else (1 if "close" in msg.lower() else 0),
+                    direction=_extract_direction_from_msg(msg),
+                    distance=_extract_distance_from_msg(msg),
+                    message=msg,
+                    depth_quality=depth_quality if mode == "depth" else None,
+                )
 
                 with self._voice_lock:
                     if self._voice_busy:
@@ -1058,6 +1198,8 @@ class MainController:
 
                 self._speak_if_free(msg, meta={"req_id": req_id, "source": "obstacle", "mode": mode})
 
+            except Exception as e:
+                log_error(e, context="obstacle_alert")
             finally:
                 self._end_obstacle()
 
@@ -1112,6 +1254,15 @@ class MainController:
                         "msg_preview": (msg or "")[:120],
                     },
                 )
+            
+            # Log structured safety telemetry for guidance
+            log_safety(
+                event_type="guidance",
+                severity=2 if "very close" in msg.lower() else (1 if "close" in msg.lower() else 0),
+                direction=_extract_direction_from_msg(msg),
+                distance=_extract_distance_from_msg(msg),
+                message=msg,
+            )
 
             if self._mute_safety_during_reading and self._get_reading():
                 return
@@ -1131,6 +1282,9 @@ class MainController:
 
         # how many detections to store per frame in telemetry
         det_log_max = int(getattr(config, "TELEM_MAX_DETS_LOG", 20) or 20)
+        
+        # System health logging interval
+        system_health_interval = int(getattr(config, "TELEM_SYSTEM_HEALTH_INTERVAL", 100) or 100)
 
         try:
             while True:
@@ -1170,6 +1324,7 @@ class MainController:
                         scene_ctx_ms = (time.perf_counter() - ctx_t0) * 1000.0
                     except Exception as e:
                         print(f"⚠️ Error updating scene context: {e!r}")
+                        log_error(e, context="update_scene_context")
                 else:
                     detections = self.last_detections
                     annotated_frame = self.last_annotated if self.last_annotated is not None else frame
@@ -1301,6 +1456,10 @@ class MainController:
                         }
                     )
 
+                # Log system health periodically
+                if system_health_interval > 0 and frame_idx % system_health_interval == 0:
+                    log_system_health()
+
                 frame_idx += 1
 
                 debug_every = int(getattr(config, "DEBUG_PRINT_EVERY_N_FRAMES", 90) or 90)
@@ -1311,6 +1470,9 @@ class MainController:
 
         except KeyboardInterrupt:
             print("🛑 Interrupted.")
+        except Exception as e:
+            log_error(e, context="main_loop")
+            raise
         finally:
             try:
                 cv.destroyAllWindows()

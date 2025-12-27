@@ -5,6 +5,7 @@ A revolutionary assistive technology system combining **YOLOv8**, **OpenAI GPT-4
 ## 🌟 Key Features
 
 ### **Core Vision Capabilities**
+
 - **Advanced YOLOv8 Detection**: Object detection, tracking, and classification
 - **Pose Estimation**: Human activity recognition (standing, sitting, walking, etc.)
 - **Instance Segmentation**: Precise object boundary detection
@@ -12,6 +13,7 @@ A revolutionary assistive technology system combining **YOLOv8**, **OpenAI GPT-4
 - **Emotion Recognition**: AI-powered facial expression analysis
 
 ### **AI-Powered Intelligence**
+
 - **GPT-4o Vision**: Advanced scene understanding and description
 - **Scene Memory System**: Semantic memory with embeddings for "Have I seen this before?" queries
 - **Proactive AI Assistant**: Context-aware suggestions and safety warnings
@@ -19,6 +21,7 @@ A revolutionary assistive technology system combining **YOLOv8**, **OpenAI GPT-4
 - **Brand/Product Recognition**: Identify products, logos, and brands
 
 ### **Enhanced Navigation & Safety**
+
 - **Real-time Obstacle Detection**: Multi-layer safety system
 - **Depth Estimation**: Distance calculation using YOLOv8 and optional MiDaS
 - **Guidance Engine**: Continuous walking guidance with spatial audio cues
@@ -26,6 +29,7 @@ A revolutionary assistive technology system combining **YOLOv8**, **OpenAI GPT-4
 - **Emergency Situation Detection**: Proactive alerts for dangerous scenarios
 
 ### **Advanced Text & Color Analysis**
+
 - **Hybrid OCR**: EasyOCR, Tesseract, and GPT-4o vision
 - **Color Identification**: Dominant color extraction and natural language description
 - **Text Translation**: Real-time translation to any language
@@ -33,12 +37,14 @@ A revolutionary assistive technology system combining **YOLOv8**, **OpenAI GPT-4
 - **Clothing Description**: Identify clothing colors and styles
 
 ### **Personal Object Learning**
+
 - **Object Memory**: Learn and remember user's personal items
 - **Location Tracking**: "Where did I leave my keys?"
 - **Usage Patterns**: Learn frequently used items and locations
 - **Embeddings-based Search**: Semantic search for objects
 
 ### **Communication & Interaction**
+
 - **Voice Commands**: Natural language understanding
 - **Real-time Speech**: Whisper-powered transcription
 - **Text-to-Speech**: Natural voice output
@@ -48,6 +54,7 @@ A revolutionary assistive technology system combining **YOLOv8**, **OpenAI GPT-4
 ## 🚀 What's New in This Enhanced Version
 
 ### **1. Advanced YOLO Features**
+
 ```python
 from src.ai_features import AdvancedObjectDetector
 
@@ -66,6 +73,7 @@ for det in detections:
 ```
 
 ### **2. Scene Memory System**
+
 ```python
 from src.ai_features import SceneMemoryEngine
 
@@ -86,6 +94,7 @@ keys_locations = memory.recall_by_object("keys")
 ```
 
 ### **3. Emotion & Face Analysis**
+
 ```python
 from src.ai_features import EmotionFaceAnalyzer
 
@@ -101,6 +110,7 @@ for face in faces:
 ```
 
 ### **4. Proactive AI Assistant**
+
 ```python
 from src.ai_features import ProactiveAssistant
 
@@ -118,6 +128,7 @@ response = assistant.generate_smart_response(
 ```
 
 ### **5. Color & Text Analysis**
+
 ```python
 from src.ai_features import ColorTextAnalyzer
 
@@ -139,6 +150,7 @@ clothing = analyzer.describe_clothing_colors(frame, person_bbox)
 ## 📋 Installation
 
 ### Prerequisites
+
 - Python 3.8+
 - CUDA-capable GPU (recommended for real-time performance)
 - Webcam or camera device
@@ -215,58 +227,65 @@ python src/controller.py --enable-all-features
 
 ### Keyboard Controls
 
-| Key | Function |
-|-----|----------|
-| `q` | Quit application |
-| `d` | Describe current scene |
-| `v` | Voice interaction mode |
-| `r` | Read text on screen |
-| `s` | Toggle safety warnings |
-| `f` | Analyze faces and emotions |
-| `c` | Describe colors |
-| `m` | Memory: "Have I seen this?" |
-| `p` | Toggle proactive mode |
-| `t` | Translate visible text |
-| `1-3` | Change reading mode |
+| Key   | Function                    |
+| ----- | --------------------------- |
+| `q`   | Quit application            |
+| `d`   | Describe current scene      |
+| `v`   | Voice interaction mode      |
+| `r`   | Read text on screen         |
+| `s`   | Toggle safety warnings      |
+| `f`   | Analyze faces and emotions  |
+| `c`   | Describe colors             |
+| `m`   | Memory: "Have I seen this?" |
+| `p`   | Toggle proactive mode       |
+| `t`   | Translate visible text      |
+| `1-3` | Change reading mode         |
 
 ### Voice Commands
 
 The system understands natural language:
 
 **Scene Understanding:**
+
 - "What do you see?"
 - "Describe the scene"
 - "Is anyone in front of me?"
 - "What colors do you see?"
 
 **Object Finding:**
+
 - "Where are my keys?"
 - "Find my phone"
 - "Is there a chair nearby?"
 
 **Safety & Navigation:**
+
 - "Any obstacles?"
 - "Is it safe to walk?"
 - "Where's the door?"
 - "Guide me"
 
 **Text & Reading:**
+
 - "Read this"
 - "What does this sign say?"
 - "Translate this to Spanish"
 
 **Memory & Context:**
+
 - "Have I been here before?"
 - "What was in this room last time?"
 - "Where did I see my laptop?"
 
 **People & Social:**
+
 - "Who's there?"
 - "How many people?"
 - "Is anyone smiling?"
 - "What are they doing?"
 
 **Advanced:**
+
 - "What brand is this?"
 - "Identify this product"
 - "Describe this person's clothing"
@@ -375,16 +394,16 @@ proactive = ProactiveAssistant(enable_proactive=True)
 while True:
     frame = capture_frame()
     detections = detect_objects(frame)
-    
+
     # Update context
     proactive.update_scene_context(detections, location_type="outdoor")
-    
+
     # Get alerts
     alerts = proactive.analyze_scene_for_proactive_alerts(
         detections,
         frame.shape
     )
-    
+
     # Handle urgent alerts immediately
     for alert in alerts:
         if proactive.should_interrupt_for_safety(alert):
@@ -467,6 +486,7 @@ MIT License - See LICENSE file for details
 ## 📞 Support
 
 For issues, questions, or suggestions:
+
 - GitHub Issues: [Link to repo]
 - Email: support@example.com
 - Discord: [Community link]
@@ -475,4 +495,4 @@ For issues, questions, or suggestions:
 
 **Made with ❤️ for the blind and visually impaired community**
 
-*This enhanced version pushes the boundaries of what's possible with AI-assisted vision technology.*
+_This enhanced version pushes the boundaries of what's possible with AI-assisted vision technology._
