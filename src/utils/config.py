@@ -295,3 +295,49 @@ SAFETY_SPEECH_ENABLED: bool = os.getenv("SAFETY_SPEECH_ENABLED", "1") == "1"
 
 TELEMETRY_ENABLED = True
 TELEM_MAX_DETS_LOG = 20
+
+# ---------------------------------------------------------------------------
+# Enhanced Navigation Settings (for blind/visually impaired users)
+# ---------------------------------------------------------------------------
+
+# Default transport mode: walking | wheelchair | transit | rideshare
+NAV_DEFAULT_MODE: str = os.getenv("NAV_DEFAULT_MODE", "walking").strip().lower()
+
+# Step simplification
+NAV_MIN_STEP_DISTANCE_M: float = float(os.getenv("NAV_MIN_STEP_DISTANCE_M", "15"))  # Merge shorter steps
+NAV_MAX_STORED_STEPS: int = int(os.getenv("NAV_MAX_STORED_STEPS", "200"))
+
+# How many steps to speak at once
+NAV_INITIAL_STEPS_SPOKEN: int = int(os.getenv("NAV_INITIAL_STEPS_SPOKEN", "3"))  # On route start
+NAV_CONTINUE_STEPS_SPOKEN: int = int(os.getenv("NAV_CONTINUE_STEPS_SPOKEN", "4"))  # On "continue"
+NAV_MAX_STEPS_PER_RESPONSE: int = int(os.getenv("NAV_MAX_STEPS_PER_RESPONSE", "8"))  # Max per response
+
+# TTS limits
+NAV_MAX_TTS_CHARS: int = int(os.getenv("NAV_MAX_TTS_CHARS", "800"))  # Prevent overly long speech
+
+# GPS settings
+GPS_LOCATION_FILE: str = os.getenv("GPS_LOCATION_FILE", str(RUNTIME_DIR / "location.json"))
+GPS_STALE_SECONDS: float = float(os.getenv("GPS_STALE_SECONDS", "45"))
+NAV_LOCATION_FILE: str = os.getenv("NAV_LOCATION_FILE", GPS_LOCATION_FILE)
+
+# OpenRouteService API
+ORS_API_KEY: str = os.getenv("ORS_API_KEY", "").strip()
+OPENROUTESERVICE_API_KEY: str = os.getenv("OPENROUTESERVICE_API_KEY", ORS_API_KEY).strip()
+if not ORS_API_KEY and OPENROUTESERVICE_API_KEY:
+    ORS_API_KEY = OPENROUTESERVICE_API_KEY
+
+ORS_BASE_URL: str = os.getenv("ORS_BASE_URL", "https://api.openrouteservice.org").strip()
+ORS_TIMEOUT_S: float = float(os.getenv("ORS_TIMEOUT_S", "12.0"))
+
+# Geocoding settings
+NAV_GEO_SIZE: int = int(os.getenv("NAV_GEO_SIZE", "10"))  # Max search results
+NAV_GEO_RADIUS_KM: float = float(os.getenv("NAV_GEO_RADIUS_KM", "25"))  # Search radius
+NAV_GEO_COUNTRY: str = os.getenv("NAV_GEO_COUNTRY", "US").strip()
+NAV_MAX_REASONABLE_KM: float = float(os.getenv("NAV_MAX_REASONABLE_KM", "150"))
+
+# Language
+NAV_LANGUAGE: str = os.getenv("NAV_LANGUAGE", "en")
+
+# Fixed origin for testing (optional - set in .env)
+NAV_ORIGIN_LAT: str = os.getenv("NAV_ORIGIN_LAT", "").strip()
+NAV_ORIGIN_LON: str = os.getenv("NAV_ORIGIN_LON", "").strip()

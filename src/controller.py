@@ -27,6 +27,7 @@ from src.speech_engine import SpeechEngine
 from src.scene_ai_client import SceneAIClient
 from src.voice_listener import VoiceListener
 from src.ai_features.scene_memory import SceneMemoryEngine
+from src.ai_features.human_analyzer import HumanAnalyzer, create_human_analyzer
 
 from src.weather_client import WeatherClient
 from src.navigation_client import NavigationClient
@@ -349,6 +350,24 @@ class MainController:
             print("📖 Reading protection: warnings muted during reading")
 
         print(f"📚 Current reading mode: {self._get_read_mode()}")
+
+        # ----------------------------
+        # Human Analyzer (sci-fi visualization)
+        # ----------------------------
+        self.human_analyzer = None
+        self._human_viz_enabled = True  # Toggle with 'h' key
+        
+        try:
+            self.human_analyzer = create_human_analyzer(
+                enable_pose=True,
+                enable_animations=True,
+                show_skeleton=True,
+                show_labels=True,
+                confidence_threshold=0.5,
+            )
+            print("🔬 Human Analyzer enabled (press 'h' to toggle)")
+        except Exception as e:
+            print(f"⚠️ Human Analyzer not available: {e}")
 
         # ----------------------------
         # Telemetry (JSONL) for graphs
@@ -1315,6 +1334,24 @@ class MainController:
                     detections, annotated_frame = self.detector.detect(frame, annotate=True)
                     detect_ms = (time.perf_counter() - det_t0) * 1000.0
 
+                    # Apply human analyzer overlay (sci-fi visualization)
+                    if (self.human_analyzer is not None and 
+                        self._human_viz_enabled and 
+                        detections):
+                        try:
+                            # Check if any humans detected
+                            human_labels = {'person', 'man', 'woman', 'human face', 'boy', 'girl', 'human body'}
+                            has_humans = any(
+                                (d.get('label', '') or '').lower() in human_labels
+                                for d in detections
+                            )
+                            if has_humans:
+                                _, annotated_frame = self.human_analyzer.analyze_humans(
+                                    annotated_frame, detections
+                                )
+                        except Exception as e:
+                            pass  # Don't crash on visualization errors
+
                     self.last_detections = detections
                     self.last_annotated = annotated_frame
 
@@ -1415,6 +1452,12 @@ class MainController:
                             print(f"   - {mem.description}")
                     else:
                         print("   No memories yet - press 'x' to save scenes")
+                elif key == ord("h"):
+                    # Toggle human analyzer visualization
+                    self._human_viz_enabled = not self._human_viz_enabled
+                    state = "ON" if self._human_viz_enabled else "OFF"
+                    print(f"🔬 Human visualization: {state}")
+                    self._speak_blocking(f"Human analysis visualization {state.lower()}.", meta={"source": "system"})
 
                 # --- Frame telemetry ---
                 loop_total_ms = (time.perf_counter() - loop_t0) * 1000.0
