@@ -16,6 +16,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # .../smart-glasses-project-personal
 RUNTIME_DIR = PROJECT_ROOT / "runtime"
 RUNTIME_DIR.mkdir(parents=True, exist_ok=True)
+FULLSCREEN_WINDOW = True  # Set to False to start windowed
 
 LOCATION_JSON_PATH: str = str(RUNTIME_DIR / "location.json")
 

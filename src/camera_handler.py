@@ -52,19 +52,23 @@ class CameraHandler:
         self.cap.set(cv.CAP_PROP_FRAME_WIDTH, frame_width)
         self.cap.set(cv.CAP_PROP_FRAME_HEIGHT, frame_height)
 
-    # attempts to free camera and destroy any open cv windows when the object is deleted.
+    # attempts to free camera when the object is deleted.
+    # Note: Window cleanup is handled by the controller
     def __del__(self):
         # free camera
         try:
-            self.cap.release()
+            if hasattr(self, 'cap') and self.cap is not None:
+                self.cap.release()
         except Exception:
             pass # if release fails, ignore it
-
-        # destroy any open cv windows
-        try: 
-            cv.destroyAllWindows()
+    
+    def release(self):
+        """Explicitly release camera resources"""
+        try:
+            if hasattr(self, 'cap') and self.cap is not None:
+                self.cap.release()
         except Exception:
-            pass # if destroyAllWindows fails, ignore it
+            pass
 
     def capture_frame(self):
         ret, frame = self.cap.read() # attempt to read a frame from the camera
@@ -72,7 +76,7 @@ class CameraHandler:
         if not ret: # if reading the frame failed...
             return None # return None.
         
-        return frame # otherwise, return the captured frame
+        return frame # return the captured frame
     
     def show_image(self, image, window_name="Camera"):
         cv.imshow(window_name, image) # show the provided frame in a window with the specified name

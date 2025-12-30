@@ -8,6 +8,18 @@ from .emotion_analyzer import EmotionFaceAnalyzer, FaceData
 from .advanced_yolo import AdvancedObjectDetector, EnhancedDetection
 from .color_text_analyzer import ColorTextAnalyzer
 from .proactive_assistant import ProactiveAssistant, ProactiveAlert
+from .human_analyzer import (
+    HumanAnalyzer,
+    HumanData,
+    FaceAnalysis,
+    HandAnalysis,
+    BodyPose,
+    MotionData,
+    Activity,
+    Gesture,
+    GazeDirection,
+    create_human_analyzer,
+)
 
 __all__ = [
     'SceneMemoryEngine',
@@ -19,4 +31,24 @@ __all__ = [
     'ColorTextAnalyzer',
     'ProactiveAssistant',
     'ProactiveAlert',
+    # Human Analyzer
+    'HumanAnalyzer',
+    'HumanData',
+    'FaceAnalysis',
+    'HandAnalysis',
+    'BodyPose',
+    'MotionData',
+    'Activity',
+    'Gesture',
+    'GazeDirection',
+    'create_human_analyzer',
+    # SignLanguage Interpreter
+    'SignLanguageInterpreter',
+    'SignCategory',
+    'SignConfidence',
+    'InterpreterMode',
+    'RecognizedSign',
+    'SignSequence',
+    'HandLandmarks',
+    'create_sign_interpreter',
 ]

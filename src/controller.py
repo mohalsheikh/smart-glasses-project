@@ -29,6 +29,13 @@ from src.voice_listener import VoiceListener
 from src.ai_features.scene_memory import SceneMemoryEngine
 from src.ai_features.human_analyzer import HumanAnalyzer, create_human_analyzer
 
+# Sign Language Interpreter import
+from src.ai_features.sign_language_interpreter import (
+    SignLanguageInterpreter,
+    InterpreterMode,
+    create_sign_interpreter,
+)
+
 from src.weather_client import WeatherClient
 from src.navigation_client import NavigationClient
 from src.assistant_brain import AssistantBrain
@@ -339,6 +346,7 @@ class MainController:
         print(f"🧠 Scene AI enabled: {getattr(self.scene_ai, 'enabled', True)}")
         print("🎛 Controls: 'q' quit | 'd' describe | 'v' voice | 'r' read | 's' toggle warnings")
         print("📖 Reading mode keys: '1' offline | '2' hybrid | '3' AI-only | 'm' cycle mode")
+        print("🤟 Sign language: 'g' toggle sign mode")
 
         if getattr(config, "OBSTACLE_ENABLED", False):
             print(f"🧯 Safety layer: enabled (mode={getattr(config, 'OBSTACLE_MODE', 'bbox')})")
@@ -370,6 +378,29 @@ class MainController:
             print(f"⚠️ Human Analyzer not available: {e}")
 
         # ----------------------------
+        # Sign Language Interpreter
+        # ----------------------------
+        self.sign_interpreter = None
+        self._sign_mode_enabled = False
+        
+        try:
+            self.sign_interpreter = create_sign_interpreter(
+                mode="continuous",
+                speech_callback=self._speak_sign_callback,
+                min_detection_confidence=0.7,
+                min_tracking_confidence=0.5,
+                speak_letters=True,
+                speak_words=True,
+                enable_visual_feedback=True,
+            )
+            print("🤟 Sign Language Interpreter enabled (press 'g' to toggle)")
+            print(f"   └─ Interpreter object: {type(self.sign_interpreter).__name__}")
+        except Exception as e:
+            print(f"⚠️ Sign Language Interpreter not available: {e}")
+            import traceback
+            traceback.print_exc()
+
+        # ----------------------------
         # Telemetry (JSONL) for graphs
         # ----------------------------
         self.telemetry: Optional[TelemetryLogger] = None
@@ -394,10 +425,99 @@ class MainController:
                     "obstacle_enabled": bool(getattr(config, "OBSTACLE_ENABLED", False)),
                     "guidance_enabled": bool(getattr(config, "GUIDANCE_ENABLED", False)),
                     "ocr_default_mode": getattr(config, "OCR_MODE", "hybrid"),
+                    "sign_language_available": self.sign_interpreter is not None,
                 }
             )
 
             print(f"🧾 Telemetry ON → {out_path}")
+
+    # ----------------------------
+    # Sign Language Speech Callback
+    # ----------------------------
+
+    def _speak_sign_callback(self, text: str) -> None:
+        """Callback for sign language interpreter to speak recognized signs."""
+        if not text:
+            return
+        
+        # Use non-blocking speech to avoid blocking the main loop
+        def speak_thread():
+            try:
+                self._speak_blocking(text, meta={"source": "sign_interpreter"})
+            except Exception as e:
+                print(f"⚠️ Sign speech error: {e}")
+        
+        threading.Thread(target=speak_thread, daemon=True).start()
+
+    # ----------------------------
+    # Sign Language Voice Commands
+    # ----------------------------
+
+    def _is_sign_language_command(self, text: str) -> bool:
+        """Check if the voice command is related to sign language mode."""
+        t = (text or "").strip().lower()
+        if not t:
+            return False
+        keywords = [
+            "sign language",
+            "sign mode",
+            "signing mode",
+            "enable sign",
+            "disable sign",
+            "turn on sign",
+            "turn off sign",
+            "start sign",
+            "stop sign",
+            "what did they sign",
+            "clear sign buffer",
+            "fingerspelling",
+            "word signs",
+        ]
+        return any(k in t for k in keywords)
+
+    def _run_sign_language_command(self, text: str) -> Optional[str]:
+        """Execute a sign language related voice command."""
+        t = (text or "").strip().lower()
+        if not t:
+            return None
+
+        if self.sign_interpreter is None:
+            return "Sign language interpreter is not available."
+
+        # Enable/disable commands
+        if any(k in t for k in ["enable sign", "turn on sign", "start sign"]):
+            self._sign_mode_enabled = True
+            return "Sign language interpreter enabled."
+        
+        if any(k in t for k in ["disable sign", "turn off sign", "stop sign"]):
+            self._sign_mode_enabled = False
+            return "Sign language interpreter disabled."
+
+        # Query commands
+        if "what did they sign" in t:
+            word = self.sign_interpreter.get_current_word()
+            if word:
+                return f"The current word being spelled is: {word}"
+            return "No signs detected recently."
+
+        if "clear sign buffer" in t or "clear buffer" in t:
+            self.sign_interpreter.clear_buffer()
+            return "Sign buffer cleared."
+
+        # Mode switching
+        if "fingerspelling" in t:
+            self.sign_interpreter.set_mode(InterpreterMode.FINGERSPELLING)
+            return "Switched to fingerspelling mode."
+        
+        if "word signs" in t:
+            self.sign_interpreter.set_mode(InterpreterMode.WORD_SIGNS)
+            return "Switched to word signs mode."
+
+        if "continuous" in t:
+            self.sign_interpreter.set_mode(InterpreterMode.CONTINUOUS)
+            return "Switched to continuous mode."
+
+        return None
 
     # ----------------------------
     # Request IDs
@@ -965,7 +1085,17 @@ class MainController:
                     self._speak_blocking("I didn't catch that. Try again.", meta={"req_id": req_id, "source": "voice"})
                     return
 
-                # 1) Toggle warnings
+                # 1) Sign language commands
+                if self._is_sign_language_command(text):
+                    msg = self._run_sign_language_command(text)
+                    if msg:
+                        command_type = "sign_language"
+                        if self.telemetry is not None:
+                            self.telemetry.log_event("voice_command", {"req_id": req_id, "cmd": "sign_language"})
+                        self._speak_blocking(msg, meta={"req_id": req_id, "source": "voice"})
+                        return
+
+                # 2) Toggle warnings
                 if self._is_toggle_command(text):
                     msg = self._run_toggle_command(text)
                     if msg:
@@ -975,7 +1105,7 @@ class MainController:
                         self._speak_blocking(msg, meta={"req_id": req_id, "source": "voice"})
                         return
 
-                # 2) Reading mode command
+                # 3) Reading mode command
                 if self._is_read_mode_command(text):
                     msg = self._run_read_mode_command(text)
                     if msg:
@@ -985,7 +1115,7 @@ class MainController:
                         self._speak_blocking(msg, meta={"req_id": req_id, "source": "voice"})
                         return
 
-                # 3) Document commands (protected reading mode)
+                # 4) Document commands (protected reading mode)
                 if frame_snapshot is not None and self._is_doc_command(text):
                     command_type = "document"
                     self._set_reading(True)
@@ -1034,7 +1164,7 @@ class MainController:
                     finally:
                         self._set_reading(False)
 
-                # 4) Otherwise route to assistant
+                # 5) Otherwise route to assistant
                 command_type = "brain"
                 tbrain0 = time.perf_counter()
                 try:
@@ -1296,8 +1426,24 @@ class MainController:
         print("🚀 Smart Glasses System Starting...")
         print("Press 'q' quit | 'd' describe | 'v' voice | 'r' read | 's' toggle warnings")
         print("Reading mode keys: '1' offline | '2' hybrid | '3' AI-only | 'm' cycle mode")
+        print("Sign language: 'g' toggle | Human viz: 'h' toggle | 'f' toggle fullscreen")
 
         frame_idx = 0
+        
+        # Window setup - create named window with fullscreen support
+        window_name = "Smart Glasses - AI Assistant"
+        cv.namedWindow(window_name, cv.WINDOW_NORMAL)
+        
+        # Check config for fullscreen preference, default to True
+        self._fullscreen = getattr(config, "FULLSCREEN_WINDOW", True)
+        if self._fullscreen:
+            cv.setWindowProperty(window_name, cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+        else:
+            # Set a larger default window size
+            cv.resizeWindow(window_name, 1280, 720)
+        
+        # Mirror mode - flip horizontally so it feels like a mirror
+        self._mirror_mode = getattr(config, "MIRROR_MODE", False)
 
         # how many detections to store per frame in telemetry
         det_log_max = int(getattr(config, "TELEM_MAX_DETS_LOG", 20) or 20)
@@ -1337,7 +1483,8 @@ class MainController:
                     # Apply human analyzer overlay (sci-fi visualization)
                     if (self.human_analyzer is not None and 
                         self._human_viz_enabled and 
-                        detections):
+                        detections and
+                        not self._sign_mode_enabled):  # Don't overlap with sign mode
                         try:
                             # Check if any humans detected
                             human_labels = {'person', 'man', 'woman', 'human face', 'boy', 'girl', 'human body'}
@@ -1351,6 +1498,23 @@ class MainController:
                                 )
                         except Exception as e:
                             pass  # Don't crash on visualization errors
+
+                    # Process sign language if enabled
+                    if self._sign_mode_enabled and self.sign_interpreter is not None:
+                        try:
+                            signs, annotated_frame = self.sign_interpreter.process_frame(
+                                annotated_frame, 
+                                detections
+                            )
+                            if signs:
+                                # Only process high-confidence signs
+                                best_sign = max(signs, key=lambda s: s.confidence)
+                                if best_sign.confidence >= 0.70:
+                                    # Print to console for debugging
+                                    print(f"🤟 Sign detected: {best_sign.sign} ({best_sign.confidence:.0%})")
+                        except Exception as e:
+                            # Only print unique errors (not every frame)
+                            pass
 
                     self.last_detections = detections
                     self.last_annotated = annotated_frame
@@ -1403,13 +1567,45 @@ class MainController:
                     2,
                 )
 
+                # Show sign language mode status
+                if self._sign_mode_enabled:
+                    cv.putText(
+                        annotated_frame,
+                        "SIGN MODE: ON",
+                        (10, 120),
+                        cv.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0, 255, 255),
+                        2,
+                    )
+
                 if getattr(config, "SHOW_DEBUG_WINDOW", True):
-                    self.camera.show_image(annotated_frame, window_name="Smart Glasses - AI Assistant")
+                    # Apply mirror if enabled
+                    if self._mirror_mode:
+                        display_frame = cv.flip(annotated_frame, 1)
+                    else:
+                        display_frame = annotated_frame
+                    cv.imshow(window_name, display_frame)
 
                 key = cv.waitKey(1) & 0xFF
                 if key == ord("q"):
                     print("👋 Exiting.")
                     break
+                elif key == ord("f"):
+                    # Toggle fullscreen
+                    self._fullscreen = not self._fullscreen
+                    if self._fullscreen:
+                        cv.setWindowProperty(window_name, cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
+                        print("🖥️ Fullscreen: ON")
+                    else:
+                        cv.setWindowProperty(window_name, cv.WND_PROP_FULLSCREEN, cv.WINDOW_NORMAL)
+                        cv.resizeWindow(window_name, 1280, 720)
+                        print("🖥️ Fullscreen: OFF")
+                elif key == ord("p"):
+                    # Toggle mirror mode
+                    self._mirror_mode = not self._mirror_mode
+                    state = "ON" if self._mirror_mode else "OFF"
+                    print(f"🪞 Mirror mode: {state}")
                 elif key == ord("d"):
                     self._handle_manual_describe(frame_width, frame)
                 elif key == ord("v"):
@@ -1458,6 +1654,26 @@ class MainController:
                     state = "ON" if self._human_viz_enabled else "OFF"
                     print(f"🔬 Human visualization: {state}")
                     self._speak_blocking(f"Human analysis visualization {state.lower()}.", meta={"source": "system"})
+                elif key == ord("g"):
+                    # Toggle sign language interpreter
+                    if self.sign_interpreter is not None:
+                        self._sign_mode_enabled = not self._sign_mode_enabled
+                        state = "ON" if self._sign_mode_enabled else "OFF"
+                        print(f"🤟 Sign language mode: {state}")
+                        self._speak_blocking(f"Sign language interpreter {state.lower()}.", meta={"source": "system"})
+                        
+                        # Log the toggle
+                        if self.telemetry is not None:
+                            self.telemetry.log_event("sign_mode_toggle", {"enabled": self._sign_mode_enabled})
+                    else:
+                        print("⚠️ Sign language interpreter not available")
+                        self._speak_blocking("Sign language interpreter not available.", meta={"source": "system"})
+                elif key == ord("c"):
+                    # Clear sign language buffer (when in sign mode)
+                    if self._sign_mode_enabled and self.sign_interpreter is not None:
+                        self.sign_interpreter.clear_buffer()
+                        print("📝 Sign buffer cleared")
+                        self._speak_blocking("Sign buffer cleared.", meta={"source": "system"})
 
                 # --- Frame telemetry ---
                 loop_total_ms = (time.perf_counter() - loop_t0) * 1000.0
@@ -1495,6 +1711,7 @@ class MainController:
                             "is_reading": bool(self._get_reading()),
                             "safety_enabled": bool(self._safety_speech_enabled),
                             "tts_locked": bool(self._tts_lock.locked()),
+                            "sign_mode_enabled": bool(self._sign_mode_enabled),
                             "dets_compact": dets_compact,
                         }
                     )
@@ -1517,19 +1734,54 @@ class MainController:
             log_error(e, context="main_loop")
             raise
         finally:
+            print("\n🧹 Cleaning up...")
+            
+            # Step 1: Release camera FIRST (stops new frames)
             try:
+                if hasattr(self, 'camera') and self.camera is not None:
+                    if hasattr(self.camera, 'cap') and self.camera.cap is not None:
+                        self.camera.cap.release()
+                        print("   Camera released.")
+            except Exception as e:
+                print(f"   Camera release error: {e}")
+            
+            # Step 2: Process pending window events and destroy windows
+            # On macOS, we need multiple waitKey calls to flush the event queue
+            try:
+                for _ in range(5):
+                    cv.waitKey(1)
                 cv.destroyAllWindows()
-            except Exception:
-                pass
+                for _ in range(5):
+                    cv.waitKey(1)
+                print("   Windows closed.")
+            except Exception as e:
+                print(f"   Window cleanup error: {e}")
 
-            # close telemetry safely
+            # Step 3: Close telemetry safely
             try:
                 if self.telemetry is not None:
                     self.telemetry.close()
+                    print("   Telemetry closed.")
             except Exception:
                 pass
 
-            # remove global logger
+            # Step 4: Clean up MediaPipe resources in human analyzer
+            try:
+                if hasattr(self, 'human_analyzer') and self.human_analyzer is not None:
+                    del self.human_analyzer
+                    self.human_analyzer = None
+            except Exception:
+                pass
+            
+            # Step 5: Clean up sign interpreter
+            try:
+                if hasattr(self, 'sign_interpreter') and self.sign_interpreter is not None:
+                    del self.sign_interpreter
+                    self.sign_interpreter = None
+            except Exception:
+                pass
+
+            # Step 6: Remove global logger
             try:
                 set_global_logger(None)
             except Exception:
@@ -1539,6 +1791,7 @@ class MainController:
             print("\n📊 Final Stats:")
             print(f"   Average FPS: {avg_fps:.1f}")
             print(f"   Total frames: {frame_idx}")
+            print("✅ Cleanup complete.")
 
 
 if __name__ == "__main__":

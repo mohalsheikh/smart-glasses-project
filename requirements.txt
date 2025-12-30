@@ -1,4 +1,5 @@
-# Enhanced Smart Glasses for the Blind - Requirements
+# Enhanced Smart Glasses for the Blind - Requirements (single file)
+
 # Core Vision & AI
 ultralytics>=8.3.0
 opencv-python>=4.10.0
@@ -10,28 +11,32 @@ torchvision>=0.15.0
 openai>=1.55.0
 tiktoken>=0.8.0
 
+# Human Analyzer (pose/hands/face mesh)
+mediapipe>=0.10.0
+
+# Face identity / embeddings (optional but included)
+face-recognition>=1.3.0
+facenet-pytorch>=2.6.0
+
 # Computer Vision Enhancement
-mediapipe>=0.10.0  # Face mesh, pose, hand tracking
-face-recognition>=1.3.0  # Face recognition
-facenet-pytorch>=2.6.0  # Face embeddings
-albumentations>=1.4.0  # Image augmentation
+albumentations>=1.4.0
 scikit-image>=0.24.0
 
 # OCR & Text
 easyocr>=1.7.0
 pytesseract>=0.3.10
-paddleocr>=2.8.0  # Advanced OCR
+paddleocr>=2.8.0
 
 # Audio Processing
 pyaudio>=0.2.14
 pyttsx3>=2.90
 SpeechRecognition>=3.10.0
 sounddevice>=0.5.0
-whisper>=1.0  # Local speech recognition
+whisper>=1.0
 
 # NLP & Language
 transformers>=4.45.0
-sentence-transformers>=3.2.0  # Semantic similarity
+sentence-transformers>=3.2.0
 spacy>=3.8.0
 langdetect>=1.0.9
 googletrans>=4.0.0
@@ -42,7 +47,7 @@ requests>=2.32.0
 
 # Data Processing
 pandas>=2.2.0
-pillow>=10.4.0
+pillow>=10.2.0,<10.3.0
 scipy>=1.14.0
 
 # Machine Learning
@@ -55,7 +60,4 @@ pydantic>=2.9.0
 colorama>=0.4.6
 tqdm>=4.66.0
 python-json-logger>=3.2.0
-
-# Hardware Support (optional)
-# RPi.GPIO>=0.7.1  # Uncomment for Raspberry Pi
-# adafruit-circuitpython-vl53l0x>=3.6.0  # ToF sensor
+lap>=0.5.12
