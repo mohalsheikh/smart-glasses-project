@@ -32,3 +32,9 @@ venv311/
 # Secrets / local
 .env
 .DS_Store
+
+# Virtual envs
+venv311/
+.venv/
+venv/
+
