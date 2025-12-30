@@ -15,3 +15,20 @@ venv/
 
 *.log
 tmp/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+
+# Virtual envs
+venv/
+.venv/
+venv311/
+
+# Secrets / local
+.env
+.DS_Store
