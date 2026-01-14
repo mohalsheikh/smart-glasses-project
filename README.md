@@ -1,253 +1,453 @@
-# 👓 VisionAssist AI
-
-### Intelligent Smart Glasses System for the Visually Impaired
+# VisionAssist AI - Smart Glasses for the Visually Impaired
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Status-Active-success?style=for-the-badge" alt="Status">
-  <img src="https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python" alt="Python">
-  <img src="https://img.shields.io/badge/AI-Powered-purple?style=for-the-badge" alt="AI Powered">
-  <img src="https://img.shields.io/badge/Type-Capstone%20Project-orange?style=for-the-badge" alt="Capstone">
+  <img src="https://img.shields.io/badge/Python-3.11+-blue.svg" alt="Python">
+  <img src="https://img.shields.io/badge/OpenCV-4.8+-green.svg" alt="OpenCV">
+  <img src="https://img.shields.io/badge/YOLOv8-Ultralytics-red.svg" alt="YOLO">
+  <img src="https://img.shields.io/badge/MediaPipe-Latest-orange.svg" alt="MediaPipe">
+  <img src="https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-lightgrey.svg" alt="Platform">
 </p>
 
-<p align="center">
-  <em>A comprehensive AI-powered assistive technology system designed to enhance independence and safety for blind and visually impaired users through real-time environmental awareness, intelligent navigation, and natural voice interaction.</em>
-</p>
+An AI-powered smart glasses system designed to assist visually impaired users through real-time computer vision, natural language processing, and audio feedback. The system provides object detection, scene description, text reading, navigation assistance, sign language interpretation, and more.
 
 ---
 
-## 🎯 Project Overview
+## 🌟 Features
 
-**VisionAssist AI** is a capstone project that transforms ordinary smart glasses into an intelligent assistant capable of understanding and describing the world around visually impaired users. The system combines state-of-the-art computer vision, natural language processing, and spatial awareness technologies to provide real-time guidance and environmental information through natural voice interaction.
+### Core Features
 
-Unlike simple object detection apps, VisionAssist AI acts as a **true intelligent companion**—understanding context, remembering scenes, providing proactive safety alerts, and engaging in natural conversation about the user's surroundings.
+| Feature                   | Description                                                           |
+| ------------------------- | --------------------------------------------------------------------- |
+| **🔍 Object Detection**   | Real-time detection of 600+ objects using YOLOv8 with Open Images V7  |
+| **🗣️ Scene Description**  | AI-powered natural language descriptions of surroundings using GPT-4o |
+| **📖 Text Reading (OCR)** | Read text from documents, signs, labels with multiple modes           |
+| **🎤 Voice Commands**     | Hands-free control with natural language voice commands               |
+| **🧭 Navigation**         | Turn-by-turn walking directions with OpenRouteService                 |
+| **🌤️ Weather**            | Real-time weather information for your location                       |
 
----
+### Advanced AI Features
 
-## ✨ Key Features
-
-### 🔍 Real-Time Scene Understanding
-
-- **Intelligent Object Detection** — Identifies and tracks objects in real-time using advanced AI models, with smart prioritization of what matters most
-- **Scene Description** — Provides natural, conversational descriptions of the environment ("You're in a kitchen. There's a table in front of you with a mug on it, and the refrigerator is to your left")
-- **Person Detection & Analysis** — Detects people, estimates their distance, analyzes body language, and describes their general appearance and activities
-- **Context-Aware Processing** — Understands the difference between indoor/outdoor environments and adjusts its behavior accordingly
-
-### 📖 Advanced Text Recognition
-
-- **Multi-Mode OCR System** — Three reading modes available:
-  - _Offline Mode_ — Fast, local text recognition for quick reads
-  - _Hybrid Mode_ — Combines local processing with AI enhancement for better accuracy
-  - _AI Mode_ — Full scene-aware text understanding for complex documents
-- **Document Reader** — Paragraph-by-paragraph reading with navigation (next, repeat, summarize)
-- **Smart Text Processing** — Handles signs, labels, documents, screens, and handwritten text
-- **Reading Order Intelligence** — Understands proper reading flow for multi-column layouts
-
-### 🧭 Accessible Navigation System
-
-- **Multi-Modal Transport Support**:
-  - 🚶 Walking directions with pedestrian-focused guidance
-  - ♿ Wheelchair-accessible routing
-  - 🚌 Public transit integration
-  - 🚗 Rideshare/taxi directions
-- **Smart Destination Selection** — Automatically finds the closest option when multiple exist ("Navigate to Starbucks" finds the nearest one)
-- **Landmark-Based Directions** — Uses recognizable landmarks for orientation instead of just street names
-- **Turn-by-Turn Guidance** — Clear, spoken directions optimized for audio ("In about 50 meters, turn right at the crosswalk")
-- **Live GPS Integration** — Real-time position tracking with graceful fallback handling
-
-### 🛡️ Safety & Obstacle Avoidance
-
-- **Real-Time Hazard Detection** — Identifies obstacles, stairs, curbs, poles, and other trip hazards
-- **Depth Estimation** — Uses AI-powered depth analysis to estimate object distances
-- **Proximity Alerts** — Escalating warnings based on distance ("Chair on your left" → "Chair on your left, close" → "Chair on your left, very close")
-- **Trip Hazard Detection** — Specialized detection for step-downs and uneven surfaces
-- **Configurable Alert Profiles**:
-  - _Indoor Mode_ — Focus on furniture, doors, stairs
-  - _Outdoor Mode_ — Emphasis on traffic, curbs, obstacles
-  - _Quiet Mode_ — Only critical danger alerts
-
-### 🎙️ Natural Voice Interaction
-
-- **Conversational AI Brain** — Understands natural questions and commands, not just keywords
-- **Multi-Intent Understanding** — Handles complex requests ("What's the weather and give me directions to the library")
-- **Context Retention** — Remembers conversation history for follow-up questions
-- **Smart Transcription** — AI-powered speech correction for noisy environments
-- **Natural Speech Output** — Human-like spoken responses optimized for clarity
-
-### 🧠 Intelligent Assistant Capabilities
-
-- **Weather Information** — Current conditions and forecasts with natural descriptions
-- **Time & Date** — Spoken time in natural format
-- **Question Answering** — Answers questions about visible content (math problems, labels, etc.)
-- **Translation Support** — Reads and translates visible text to other languages
-- **General Knowledge** — Answers questions using conversational AI
-
-### 💾 Scene Memory System
-
-- **Spatial Memory** — Remembers scenes and objects using AI embeddings
-- **"Have I Seen This?" Queries** — Can recall if similar objects or scenes were encountered before
-- **Location Tagging** — Associates memories with locations for better recall
-- **Scene Classification** — Automatically categorizes scenes (kitchen, office, street, etc.)
-- **Context Summaries** — Provides summaries of recent observations
-
-### 📊 Advanced Analytics & Monitoring
-
-- **Real-Time Telemetry** — Logs performance metrics for analysis
-- **FPS Monitoring** — Ensures smooth real-time performance
-- **Detection Confidence Tracking** — Monitors AI accuracy over time
-- **System Health Logging** — Tracks resource usage and errors
+| Feature                          | Description                                             |
+| -------------------------------- | ------------------------------------------------------- |
+| **🤟 Sign Language Interpreter** | Real-time ASL alphabet and common signs recognition     |
+| **🔬 Human Analyzer**            | Pose estimation, gesture recognition, emotion detection |
+| **🧠 Scene Memory**              | Remember and recall locations of objects                |
+| **⚡ Proactive Assistant**       | Automatic alerts for important changes                  |
+| **🎨 Color & Text Analyzer**     | Identify colors and analyze text in images              |
+| **🚧 Obstacle Detection**        | Safety warnings for nearby obstacles                    |
 
 ---
 
 ## 🏗️ System Architecture
 
-The system is built on a modular, event-driven architecture with several interconnected components:
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                      MAIN CONTROLLER                            │
-│         Orchestrates all subsystems and manages state           │
-└──────────────┬───────────────────────────────────┬──────────────┘
-               │                                   │
-    ┌──────────▼──────────┐           ┌───────────▼───────────┐
-    │   VISION PIPELINE   │           │   VOICE INTERFACE     │
-    │  • Camera Handler   │           │  • Voice Listener     │
-    │  • Object Detector  │           │  • Speech Engine      │
-    │  • Depth Estimator  │           │  • Transcription      │
-    │  • Human Analyzer   │           └───────────┬───────────┘
-    └──────────┬──────────┘                       │
-               │                                  │
-    ┌──────────▼──────────┐           ┌───────────▼───────────┐
-    │    AI FEATURES      │           │   ASSISTANT BRAIN     │
-    │  • Scene AI Client  │◄─────────►│  • Intent Detection   │
-    │  • OCR Engine       │           │  • Query Handlers     │
-    │  • Scene Memory     │           │  • Context Manager    │
-    │  • Proactive Assist │           └───────────────────────┘
-    └─────────────────────┘
-               │
-    ┌──────────▼──────────┐           ┌───────────────────────┐
-    │   SAFETY LAYER      │           │   EXTERNAL SERVICES   │
-    │  • Obstacle Layer   │           │  • Weather Client     │
-    │  • Guidance Engine  │           │  • Navigation Client  │
-    │  • Alert System     │           │  • GPS Server         │
-    └─────────────────────┘           └───────────────────────┘
+│                        VisionAssist AI                          │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐ │
+│  │  Camera  │→ │  YOLO    │→ │  Scene   │→ │  Speech Engine   │ │
+│  │  Handler │  │ Detector │  │ AI/GPT-4 │  │  (TTS Output)    │ │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘ │
+│       ↓              ↓             ↓               ↑            │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────────┐ │
+│  │  Human   │  │   Sign   │  │   OCR    │  │  Voice Listener  │ │
+│  │ Analyzer │  │ Language │  │  Engine  │  │  (STT Input)     │ │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────────────┘ │
+│       ↓              ↓             ↓               ↓            │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │                    Main Controller                          ││
+│  │  • Frame processing loop (25+ FPS)                          ││
+│  │  • Feature coordination                                     ││
+│  │  • Safety monitoring                                        ││
+│  └─────────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Core Design Principles
+---
 
-- **Real-Time Performance** — Optimized for smooth operation on portable hardware
-- **Graceful Degradation** — Falls back to simpler methods when advanced features unavailable
-- **Thread Safety** — Carefully managed concurrency to prevent audio overlaps and race conditions
-- **Battery Awareness** — Efficient processing to maximize mobile battery life
-- **Network Resilience** — Handles connectivity issues without crashing
+## 📁 Project Structure
+
+```
+visionassist/
+├── src/
+│   ├── controller.py           # Main application controller
+│   ├── camera_handler.py       # Camera capture and display
+│   ├── object_detector.py      # YOLOv8 object detection
+│   ├── scene_ai_client.py      # GPT-4o scene descriptions
+│   ├── speech_engine.py        # Text-to-speech output
+│   ├── voice_listener.py       # Voice command input
+│   ├── ocr_engine.py           # Optical character recognition
+│   ├── document_reader.py      # Document reading modes
+│   ├── navigation_client.py    # Navigation and routing
+│   ├── weather_client.py       # Weather information
+│   │
+│   ├── ai_features/            # Advanced AI modules
+│   │   ├── human_analyzer.py       # Pose, gesture, emotion detection
+│   │   ├── sign_language_interpreter.py  # ASL recognition
+│   │   ├── scene_memory.py         # Spatial memory system
+│   │   ├── emotion_analyzer.py     # Facial emotion analysis
+│   │   ├── proactive_assistant.py  # Automatic alerts
+│   │   ├── advanced_yolo.py        # Enhanced YOLO features
+│   │   └── color_text_analyzer.py  # Color identification
+│   │
+│   ├── brain/                  # Intent processing
+│   │   ├── assistant_brain_impl.py # Main brain logic
+│   │   ├── intent_detection.py     # Command classification
+│   │   └── handlers/               # Command handlers
+│   │
+│   ├── safety/                 # Safety features
+│   │   ├── obstacle_layer.py       # Obstacle detection
+│   │   ├── guidance_engine.py      # Navigation guidance
+│   │   └── depth_estimator.py      # Distance estimation
+│   │
+│   └── utils/                  # Utilities
+│       ├── config.py               # Configuration settings
+│       ├── telemetry.py            # Performance logging
+│       └── telemetry_dashboard.py  # Real-time dashboard
+│
+├── telemetry/                  # Performance logs
+├── runtime/                    # Runtime data (location, etc.)
+├── requirements.txt            # Python dependencies
+└── README.md                   # This file
+```
 
 ---
 
-## 🎮 User Interaction
+## 🚀 Installation
 
-### Voice Commands (Examples)
+### Prerequisites
 
-The system understands natural language, so users can speak naturally:
+- Python 3.11 or higher
+- macOS (Apple Silicon recommended) or Linux
+- Webcam or USB camera
+- Microphone (for voice commands)
+- Speakers/headphones (for audio output)
 
-| Category       | Example Commands                                                              |
-| -------------- | ----------------------------------------------------------------------------- |
-| **Scene**      | "What's in front of me?" / "Describe my surroundings" / "What do you see?"    |
-| **Reading**    | "Read this" / "What does this say?" / "Next paragraph" / "Summarize the page" |
-| **People**     | "Is anyone here?" / "How many people?" / "Describe the person in front of me" |
-| **Navigation** | "Directions to the nearest pharmacy" / "Take me to Central Park" / "Continue" |
-| **Safety**     | "What's on my left?" / "Any obstacles ahead?"                                 |
-| **Weather**    | "What's the weather like?" / "Will it rain today?"                            |
-| **General**    | "What time is it?" / "Solve this math problem" / "What color is this?"        |
+### Step 1: Clone the Repository
 
-### Reading Modes
+```bash
+git clone https://github.com/YOUR_USERNAME/visionassist.git
+cd visionassist
+```
 
-- **Mode 1 (Offline)** — Fastest, works without internet
-- **Mode 2 (Hybrid)** — Balanced speed and accuracy
-- **Mode 3 (AI)** — Best accuracy for difficult text
+### Step 2: Create Virtual Environment
 
----
+```bash
+python3.11 -m venv venv311
+source venv311/bin/activate  # On macOS/Linux
+```
 
-## 🔬 Technical Highlights
+### Step 3: Install Dependencies
 
-### AI & Machine Learning
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
 
-- Multi-model object detection with confidence-based filtering
-- Vision-language models for scene understanding
-- Pose estimation for human analysis (17-point body, 21-point hands, 468-point face mesh)
-- Semantic embeddings for scene memory and similarity matching
-- Intent classification using large language models
+### Step 4: Set Up API Keys
 
-### Computer Vision
+Create a `.env` file or export environment variables:
 
-- Real-time video processing with frame skipping optimization
-- Multi-engine OCR with reading order reconstruction
-- Monocular depth estimation for distance awareness
-- Region-of-interest preprocessing for improved accuracy
+```bash
+export OPENAI_API_KEY="your-openai-api-key"
+export OPENROUTE_API_KEY="your-openroute-api-key"  # Optional, for navigation
+export OPENWEATHER_API_KEY="your-openweather-api-key"  # Optional, for weather
+```
 
-### Audio Processing
+### Step 5: Run the Application
 
-- Voice activity detection and noise handling
-- Speech-to-text with context-aware prompting
-- Text-to-speech with natural prosody
-- Intelligent audio queue management (no overlapping)
-
----
-
-## 📈 Performance Considerations
-
-The system is designed to balance accuracy with real-time performance:
-
-- Processes key frames selectively to maintain responsiveness
-- Caches results to avoid redundant API calls
-- Uses progressive disclosure (simple to detailed) based on user needs
-- Implements smart cooldowns to prevent alert fatigue
-- Gracefully handles network latency and failures
+```bash
+cd src
+python controller.py
+```
 
 ---
 
-## 🎓 Academic Context
+## ⌨️ Keyboard Controls
 
-This project was developed as a **Capstone Project** demonstrating the application of:
-
-- Computer Vision and Deep Learning
-- Natural Language Processing
-- Human-Computer Interaction Design
-- Assistive Technology Principles
-- Real-Time Systems Engineering
-- API Integration and Cloud Services
-
-The goal was to create a practical, user-centered solution that could genuinely improve independence and quality of life for visually impaired individuals.
-
----
-
-## 🔮 Future Roadmap
-
-Potential areas for continued development:
-
-- 🏠 Indoor mapping and spatial memory
-- 🔊 Spatial audio for directional cues
-- 👥 Face recognition for familiar people
-- 📱 Mobile app companion for configuration
-- 🌐 Multi-language support expansion
-- 🤖 Edge AI optimization for fully offline operation
+| Key | Action                              |
+| --- | ----------------------------------- |
+| `q` | Quit application                    |
+| `d` | Describe current scene              |
+| `v` | Activate voice command              |
+| `r` | Read text in view                   |
+| `s` | Toggle safety warnings              |
+| `f` | Toggle fullscreen                   |
+| `p` | Toggle mirror mode                  |
+| `h` | Toggle human analyzer visualization |
+| `g` | Toggle sign language interpreter    |
+| `c` | Clear sign language buffer          |
+| `x` | Save scene to memory                |
+| `z` | Show memory stats                   |
+| `1` | OCR: Local-only mode                |
+| `2` | OCR: Hybrid mode                    |
+| `3` | OCR: AI-only mode                   |
+| `m` | Cycle OCR modes                     |
 
 ---
 
-## 📜 License & Usage
+## 🎤 Voice Commands
 
-This project is an academic capstone submission. The codebase demonstrates proprietary techniques and architectures developed specifically for this research.
+### Scene & Objects
+
+- _"What do you see?"_ - Describe the scene
+- _"What's in front of me?"_ - Describe objects ahead
+- _"Where is my [object]?"_ - Find specific object
+- _"How many people?"_ - Count people in view
+
+### Reading
+
+- _"Read this"_ - Read text in view
+- _"Read the sign"_ - Read signage
+- _"Stop reading"_ - Stop current reading
+
+### Navigation
+
+- _"Navigate to [place]"_ - Get walking directions
+- _"How do I get to [place]?"_ - Get directions
+- _"Where am I?"_ - Current location
+
+### Weather
+
+- _"What's the weather?"_ - Current conditions
+- _"Will it rain today?"_ - Weather forecast
+
+### Sign Language
+
+- _"Enable sign language"_ - Turn on interpreter
+- _"Disable sign language"_ - Turn off interpreter
+- _"What did they sign?"_ - Get current word buffer
+
+### System
+
+- _"Help"_ - List available commands
+- _"Louder"_ / _"Quieter"_ - Adjust volume
+- _"Repeat that"_ - Repeat last message
 
 ---
 
-## 👤 Author
+## 🔬 Human Analyzer Features
 
-Developed as a capstone project showcasing expertise in AI, computer vision, and assistive technology development.
+The Human Analyzer V3 provides comprehensive human understanding:
+
+### Detection Capabilities
+
+- **33-point pose estimation** with sub-pixel accuracy
+- **21-point hand tracking** per hand (up to 4 hands)
+- **468-point face mesh** for detailed facial analysis
+
+### Activity Recognition (20 types)
+
+Standing, Sitting, Walking, Running, Waving, Pointing, Arms Raised, Arms Crossed, Bending, Crouching, Lying Down, Leaning, Jumping, Reaching, Kneeling, Stretching, Typing, On Phone, Eating, Unknown
+
+### Gesture Recognition (20 types)
+
+Open Palm, Fist, Pointing, Peace Sign, Thumbs Up, Thumbs Down, OK Sign, Rock Sign, Call Me, Wave, Grab, Pinch, Finger Gun, Three, Four, Stop, Clap, Prayer, Heart, None
+
+### Face Analysis
+
+- **Emotion Detection**: Happy, Surprised, Focused, Tired, Confused, Interested, Neutral
+- **Engagement Levels**: Highly Engaged, Engaged, Partial, Distracted, Disengaged
+- **Gaze Direction**: Forward, At You, Left, Right, Up, Down, At Phone, Away
+- **Drowsiness Detection**: PERCLOS algorithm with yawn detection
+
+### Tracking Features
+
+- Kalman filtering for smooth position tracking
+- Multi-person tracking with persistent IDs
+- Re-identification after occlusion
+- Temporal voting for stable classifications
+
+---
+
+## 🤟 Sign Language Interpreter
+
+Real-time ASL recognition for communication:
+
+### Supported Signs
+
+- **Full ASL Alphabet** (A-Z)
+- **Numbers** (0-9)
+- **Common Words**: Hello, Goodbye, Please, Thank You, Sorry, Yes, No, Help, Stop, More, Want, Need, Like, Love, Friend, Family, Work, Home, Food, Water
+
+### How to Use
+
+1. Press `g` to enable sign language mode
+2. Position your hand clearly in front of the camera
+3. Hold each sign steady for ~0.5 seconds
+4. The system will speak recognized signs
+5. Letters accumulate into words automatically
+6. Press `c` to clear the buffer
+
+### Tips for Best Results
+
+- Good lighting on your hands
+- Plain background
+- Hand 1-2 feet from camera
+- Hold signs steady
+- Full hand visible in frame
+
+---
+
+## ⚙️ Configuration
+
+Edit `src/utils/config.py` to customize:
+
+### Camera Settings
+
+```python
+DEFAULT_CAMERA_INDEX = 0        # Camera device index
+DEFAULT_FRAME_WIDTH = 640       # Frame width
+DEFAULT_FRAME_HEIGHT = 480      # Frame height
+```
+
+### Performance Settings
+
+```python
+PROCESS_EVERY_N_FRAMES = 3      # Process every N frames (higher = faster)
+YOLO_INFERENCE_SIZE = 480       # YOLO input size (smaller = faster)
+USE_GPU = True                  # Use GPU acceleration
+```
+
+### AI Settings
+
+```python
+OPENAI_VISION_MODEL = "gpt-4o"  # Vision model for scene descriptions
+OPENAI_CHAT_MODEL = "gpt-4o-mini"  # Chat model for conversations
+```
+
+### Display Settings
+
+```python
+FULLSCREEN_WINDOW = True        # Start in fullscreen
+MIRROR_MODE = False             # Mirror the display
+SHOW_FPS = True                 # Show FPS counter
+```
+
+---
+
+## 📊 Telemetry Dashboard
+
+Real-time performance monitoring:
+
+```bash
+# In a separate terminal
+cd src
+python -m utils.telemetry_dashboard
+```
+
+Dashboard shows:
+
+- FPS over time
+- Detection latency
+- Object detection counts
+- AI response times
+- System resource usage
+
+---
+
+## 🔧 Troubleshooting
+
+### Camera Not Found
+
+```bash
+# List available cameras
+python -c "import cv2; print([i for i in range(10) if cv2.VideoCapture(i).isOpened()])"
+```
+
+### Slow Performance
+
+1. Reduce frame size: `FRAME_WIDTH=480 FRAME_HEIGHT=360`
+2. Increase skip frames: `PROCESS_EVERY_N_FRAMES=5`
+3. Use smaller YOLO model: `YOLO_MODEL=yolov8n.pt`
+
+### No Audio Output (macOS)
+
+```bash
+# Test TTS
+say "Hello world"
+```
+
+### OpenAI API Errors
+
+- Verify API key: `echo $OPENAI_API_KEY`
+- Check API status: https://status.openai.com
+
+### MediaPipe Errors
+
+```bash
+pip install --upgrade mediapipe
+```
+
+---
+
+## 📋 Requirements
+
+### Core Dependencies
+
+```
+opencv-python>=4.8.0
+ultralytics>=8.0.0
+mediapipe>=0.10.0
+openai>=1.0.0
+numpy>=1.24.0
+```
+
+### Audio/Speech
+
+```
+sounddevice>=0.4.6
+soundfile>=0.12.0
+pyttsx3>=2.90  # Fallback TTS
+```
+
+### Optional
+
+```
+openrouteservice  # Navigation
+requests          # Weather API
+pillow            # Image processing
+```
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🙏 Acknowledgments
+
+- [Ultralytics](https://ultralytics.com/) for YOLOv8
+- [MediaPipe](https://mediapipe.dev/) for pose/hand/face detection
+- [OpenAI](https://openai.com/) for GPT-4o vision capabilities
+- [OpenRouteService](https://openrouteservice.org/) for navigation
+- The visually impaired community for inspiration and feedback
+
+---
+
+## 📞 Contact
+
+**Mohammed Alsheikh**
+
+- GitHub: [@YOUR_USERNAME](https://github.com/YOUR_USERNAME)
+- Project Link: [https://github.com/YOUR_USERNAME/visionassist](https://github.com/YOUR_USERNAME/visionassist)
 
 ---
 
 <p align="center">
-  <strong>VisionAssist AI</strong> — Seeing the World Through Intelligence
-</p>
-
-<p align="center">
-  <em>"Technology should enhance human capability, not replace human agency."</em>
+  Made with ❤️ for accessibility
 </p>

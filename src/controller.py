@@ -1044,6 +1044,10 @@ class MainController:
 
     
     def _handle_voice_interaction(self, frame) -> None:
+        # INTERRUPT any current speech immediately!
+        if hasattr(self.speech, 'interrupt'):
+            self.speech.interrupt()
+        
         if not self._try_start_voice():
             return
 
@@ -1426,24 +1430,9 @@ class MainController:
         print("🚀 Smart Glasses System Starting...")
         print("Press 'q' quit | 'd' describe | 'v' voice | 'r' read | 's' toggle warnings")
         print("Reading mode keys: '1' offline | '2' hybrid | '3' AI-only | 'm' cycle mode")
-        print("Sign language: 'g' toggle | Human viz: 'h' toggle | 'f' toggle fullscreen")
+        print("Sign language: 'g' toggle | Human viz: 'h' toggle")
 
         frame_idx = 0
-        
-        # Window setup - create named window with fullscreen support
-        window_name = "Smart Glasses - AI Assistant"
-        cv.namedWindow(window_name, cv.WINDOW_NORMAL)
-        
-        # Check config for fullscreen preference, default to True
-        self._fullscreen = getattr(config, "FULLSCREEN_WINDOW", True)
-        if self._fullscreen:
-            cv.setWindowProperty(window_name, cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
-        else:
-            # Set a larger default window size
-            cv.resizeWindow(window_name, 1280, 720)
-        
-        # Mirror mode - flip horizontally so it feels like a mirror
-        self._mirror_mode = getattr(config, "MIRROR_MODE", False)
 
         # how many detections to store per frame in telemetry
         det_log_max = int(getattr(config, "TELEM_MAX_DETS_LOG", 20) or 20)
@@ -1580,32 +1569,12 @@ class MainController:
                     )
 
                 if getattr(config, "SHOW_DEBUG_WINDOW", True):
-                    # Apply mirror if enabled
-                    if self._mirror_mode:
-                        display_frame = cv.flip(annotated_frame, 1)
-                    else:
-                        display_frame = annotated_frame
-                    cv.imshow(window_name, display_frame)
+                    self.camera.show_image(annotated_frame, window_name="Smart Glasses - AI Assistant")
 
                 key = cv.waitKey(1) & 0xFF
                 if key == ord("q"):
                     print("👋 Exiting.")
                     break
-                elif key == ord("f"):
-                    # Toggle fullscreen
-                    self._fullscreen = not self._fullscreen
-                    if self._fullscreen:
-                        cv.setWindowProperty(window_name, cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
-                        print("🖥️ Fullscreen: ON")
-                    else:
-                        cv.setWindowProperty(window_name, cv.WND_PROP_FULLSCREEN, cv.WINDOW_NORMAL)
-                        cv.resizeWindow(window_name, 1280, 720)
-                        print("🖥️ Fullscreen: OFF")
-                elif key == ord("p"):
-                    # Toggle mirror mode
-                    self._mirror_mode = not self._mirror_mode
-                    state = "ON" if self._mirror_mode else "OFF"
-                    print(f"🪞 Mirror mode: {state}")
                 elif key == ord("d"):
                     self._handle_manual_describe(frame_width, frame)
                 elif key == ord("v"):

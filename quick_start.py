@@ -7,7 +7,8 @@ Helps users get started quickly with sensible defaults
 import sys
 import os
 from pathlib import Path
-
+from dotenv import load_dotenv
+load_dotenv()  # Load .env file BEFORE importing other modules
 # Add project root to path
 PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
