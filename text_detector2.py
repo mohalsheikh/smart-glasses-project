@@ -3,14 +3,14 @@ Text-detection using a basic EasyOCR implementation
 Created by Eric Leon
 """
 
+import os
 import cv2
 import easyocr
 import matplotlib.pyplot as plt
-import os
-from src.utils.config import DEFAULT_OCR_CONFIDENCE_THRESHOLD
+import src.utils.config as config
 
 # read image with error handling
-image_path = "Test_img4.jpg"  # replace with your image path
+image_path = "Test_img2.jpg"  # replace with your image path
 
 # Check if file exists
 if not os.path.exists(image_path):
@@ -44,7 +44,7 @@ print("🔍 Detecting text...")
 text_ = reader.readtext(image)
 print(f"📝 Found {len(text_)} text region(s)")
 
-threshold = DEFAULT_OCR_CONFIDENCE_THRESHOLD
+threshold = config.DEFAULT_OCR_CONFIDENCE_THRESHOLD
 
 # draw bbox and text
 detections_above_threshold = 0

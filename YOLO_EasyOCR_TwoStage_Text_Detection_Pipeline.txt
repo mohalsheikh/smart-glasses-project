@@ -1,0 +1,123 @@
+TITLE: YOLO + EasyOCR Two-Stage Text Detection Pipeline
+
+DESCRIPTION:
+Use YOLO to detect the object location.
+Crop each bounding box.
+Run EasyOCR only on the cropped region.
+Return combined object + text results.
+
+------------------------------------------------------------
+SECTION 1: OVERVIEW PIPELINE
+------------------------------------------------------------
+1. Input image
+2. YOLO detects objects and returns bounding boxes
+3. Crop the image for each bounding box
+4. Run EasyOCR on each crop
+5. Output: object class + bounding box + extracted text
+
+------------------------------------------------------------
+SECTION 2: YOLO DETECTION CODE (Ultralytics Example)
+------------------------------------------------------------
+from ultralytics import YOLO
+import cv2
+
+yolo_model = YOLO("yolov8s.pt")
+img = cv2.imread("input.jpg")
+
+results = yolo_model(img)[0]
+
+detections = []
+for box in results.boxes:
+    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+    cls = int(box.cls[0])
+    conf = float(box.conf[0])
+    detections.append({
+        "bbox": (x1, y1, x2, y2),
+        "class_id": cls,
+        "confidence": conf
+    })
+
+------------------------------------------------------------
+SECTION 3: CROP IMAGE REGIONS
+------------------------------------------------------------
+crops = []
+
+for det in detections:
+    x1, y1, x2, y2 = det["bbox"]
+    crop = img[y1:y2, x1:x2]
+    crops.append((crop, det))
+
+------------------------------------------------------------
+SECTION 4: EASYOCR ON CROPS
+------------------------------------------------------------
+import easyocr
+reader = easyocr.Reader(['en'], gpu=False)
+
+for crop, det in crops:
+    ocr_result = reader.readtext(crop, detail=1)
+    det["ocr"] = ocr_result
+
+------------------------------------------------------------
+SECTION 5: PRINT COMBINED RESULTS
+------------------------------------------------------------
+for det in detections:
+    print("Object:", det["class_id"])
+    print("Confidence:", det["confidence"])
+    print("Bounding Box:", det["bbox"])
+    print("OCR:", det["ocr"])
+    print()
+
+------------------------------------------------------------
+SECTION 6: FULL MINIMAL WORKING PIPELINE
+------------------------------------------------------------
+from ultralytics import YOLO
+import cv2
+import easyocr
+
+# Load models
+yolo_model = YOLO("yolov8s.pt")
+reader = easyocr.Reader(['en'])
+
+# Load image
+img = cv2.imread("input.jpg")
+
+# YOLO detection
+results = yolo_model(img)[0]
+detections = []
+for box in results.boxes:
+    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+    cls = int(box.cls[0])
+    conf = float(box.conf[0])
+    detections.append({"bbox": (x1, y1, x2, y2), "class_id": cls, "confidence": conf})
+
+# OCR on each crop
+for det in detections:
+    x1, y1, x2, y2 = det["bbox"]
+    crop = img[y1:y2, x1:x2]
+    det["ocr"] = reader.readtext(crop, detail=1)
+
+# Output combined results
+for det in detections:
+    print("Detected Object:", det["class_id"])
+    print("Bounding Box:", det["bbox"])
+    print("YOLO Confidence:", det["confidence"])
+    print("OCR Results:", det["ocr"])
+    print("----------------------------------")
+
+------------------------------------------------------------
+SECTION 7: OPTIONAL — IMPROVE OCR ACCURACY
+------------------------------------------------------------
+1. Resize crop:
+crop = cv2.resize(crop, None, fx=2, fy=2)
+
+2. Convert to grayscale:
+gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+
+3. Apply thresholding:
+_, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_OTSU)
+
+Use thresh as input to EasyOCR.
+
+------------------------------------------------------------
+END OF FILE
+------------------------------------------------------------

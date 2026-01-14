@@ -9,9 +9,9 @@ import src.utils.config as config
 class CameraHandler:
     def __init__(
             self,
-            camera_index: int = config.CAMERA_INDEX,
-            frame_width: int = config.FRAME_WIDTH,
-            frame_height: int = config.FRAME_HEIGHT
+            camera_index: int = config.DEFAULT_CAMERA_INDEX,
+            frame_width: int = config.DEFAULT_FRAME_WIDTH,
+            frame_height: int = config.DEFAULT_FRAME_HEIGHT
             ):
         
         # parameters cannot be None and must be of the types specified in the function signature.
