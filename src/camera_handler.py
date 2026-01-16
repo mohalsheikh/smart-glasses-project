@@ -53,6 +53,9 @@ class CameraHandler:
         self.cap.set(cv.CAP_PROP_FRAME_WIDTH, frame_width)
         self.cap.set(cv.CAP_PROP_FRAME_HEIGHT, frame_height)
 
+        self._frame_width = frame_width
+        self._frame_height = frame_height
+
     # attempts to free camera and destroy any open cv windows when the object is deleted.
     def __del__(self):
         # free camera
@@ -89,3 +92,11 @@ class CameraHandler:
     # waits for a specific key to be pressed. returns True if the key is pressed, False otherwise.
     def wait_key_press(self, key: str, delay: int = 1):
         return cv.waitKey(delay) & 0xFF == ord(key)
+    
+    @property
+    def frame_width(self) -> int:
+        return self._frame_width
+    
+    @property
+    def frame_height(self) -> int:
+        return self._frame_height

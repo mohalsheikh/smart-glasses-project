@@ -27,6 +27,8 @@ class MainController:
         self.ocr = OCREngine() # unfinished.
         self.speech = SpeechEngine()
 
+        self.camera_frame_width = self.camera.frame_width # frame width from camera handler
+
         print("⚡ MANUAL Smart Glasses System Initialized")
         print(f"📊 Model: {config.DEFAULT_MODEL_NAME}")
 
@@ -39,7 +41,25 @@ class MainController:
         print('Press r to process a frame. Press Ctrl+C to exit.')
         while True: # main loop
             if self.camera.wait_key_press('r'):  # if r is pressed...
-                frame = self.camera.capture_and_show_frame()
-                print("Frame processed.")
-            else:
-                self.camera.show_image(frame)
+                print("r pressed.")
+                # first, the camera handler obtains a frame from the camera...
+                frame = self.camera.capture_frame() 
+                print("Got frame from camera.")
+
+                # next, the object detector detects objects inside of the frame.
+                # from this we get the detection results and update the frame with annotations.
+                detections, frame = self.detector.detect(frame, annotate=True)
+                print("Detection complete.")
+
+                # TODO ocr here eventually when that's done...
+
+                # finally, we summarize the detections and speak them out loud.
+                description = summarize_detections(detections, frame_width=self.camera_frame_width)
+                print("Generated description.")
+
+                self.speech.speak(description)
+
+                print(f"Frame processed: {description}")
+            
+            self.camera.show_image(frame) # just keep showing the last frame so that the window doesn't say not responding.
+                
