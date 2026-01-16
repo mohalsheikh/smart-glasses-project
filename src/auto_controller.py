@@ -115,7 +115,7 @@ class MainController:
                     )
 
                 # Quit on 'q'
-                if cv.waitKey(1) & 0xFF == ord("q"):
+                if self.camera.wait_key_press('q'):
                     print("👋 Exiting.")
                     break
 

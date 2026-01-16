@@ -4,7 +4,7 @@ Created by Mohammed
 """
 
 import sys
-from src.manual_controller import MainController # change this to auto_controller for the auto version, or manual_controller for the manual version
+from src.auto_controller import MainController # change this to auto_controller for the auto version, or manual_controller for the manual version
 
 
 def main():
