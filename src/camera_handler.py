@@ -83,6 +83,8 @@ class CameraHandler:
 
         if frame is not None: # if capturing the frame was successful...
             self.show_image(frame, window_name) # show the captured frame in a window with the specified name
+        
+        return frame # return the captured frame (or None if capturing failed)
 
     # waits for a specific key to be pressed. returns True if the key is pressed, False otherwise.
     def wait_key_press(self, key: str, delay: int = 1):

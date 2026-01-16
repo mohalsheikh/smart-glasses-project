@@ -31,12 +31,15 @@ class MainController:
         print(f"📊 Model: {config.DEFAULT_MODEL_NAME}")
 
     def run(self) -> None:    
-        # showing the first frame of the camera to open the window.
-
+        # frame variable used to hold the current frame from the camera.
+        # initially showing the first frame of the camera to open the window.
+        frame = self.camera.capture_and_show_frame()
 
         # instructions for the user
-        print('Press Spacebar to process a frame. Press Ctrl+C to exit.')
+        print('Press r to process a frame. Press Ctrl+C to exit.')
         while True: # main loop
             if self.camera.wait_key_press('r'):  # if r is pressed...
-                self.camera.capture_and_show_frame()
+                frame = self.camera.capture_and_show_frame()
                 print("Frame processed.")
+            else:
+                self.camera.show_image(frame)
