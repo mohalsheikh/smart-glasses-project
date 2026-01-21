@@ -169,6 +169,7 @@ def process_image(image_path: str, show: bool = False, use_gpu: bool = False) ->
 
 
 def process_camera(
+#-----------------------------------------------{
 	camera_index: int = 0,
 	show: bool = True,
 	use_gpu: bool = False,
@@ -209,6 +210,7 @@ def process_camera(
 	stop_event = threading.Event()
 
 	def iou(boxA, boxB):
+	#-------------------------------{
 		# boxes are (x1,y1,x2,y2)
 		xA = max(boxA[0], boxB[0])
 		yA = max(boxA[1], boxB[1])
@@ -221,8 +223,10 @@ def process_camera(
 		boxBArea = max(0, boxB[2] - boxB[0]) * max(0, boxB[3] - boxB[1])
 		union = boxAArea + boxBArea - interArea
 		return interArea / union if union > 0 else 0.0
+	#-------------------------------}
 
 	def ocr_worker():
+		#-------------------------------{
 		while not stop_event.is_set():
 			try:
 				key, crop = ocr_q.get(timeout=0.5)
@@ -410,3 +414,5 @@ if __name__ == "__main__":
 			print(f"   OCR: {d['ocr']}")
 			print()
 
+		#-------------------------------}
+#-----------------------------------------------}
