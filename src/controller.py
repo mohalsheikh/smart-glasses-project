@@ -43,9 +43,41 @@ class MainController:
         self.last_detections = []
         self.last_annotated = None
 
+    
+        #---Eric
+        # OCR state
+        self.ocr_results_cache = []  # Store last OCR results
+        self.ocr_cooldown_frames = 0  # Skip heavy detection while OCR just triggered
+        #---
+
         print("⚡ FAST Smart Glasses System Initialized")
         print(f"📊 Model: {config.DEFAULT_MODEL_NAME}")
         print(f"🎯 Processing every {config.PROCESS_EVERY_N_FRAMES} frames")
+        #---Eric
+        print(f"🔤 Press 'R' to run OCR on detected objects")
+
+    def _resize_frame_for_yolo(self, frame, max_side: int = 1280) -> tuple:
+        """Resize frame so largest side <= max_side for faster YOLO inference.
+        
+        Returns (resized_frame, scale_factor).
+        """
+        h, w = frame.shape[:2]
+        if max(h, w) > max_side:
+            scale = max_side / max(h, w)
+            new_w, new_h = int(w * scale), int(h * scale)
+            resized = cv.resize(frame, (new_w, new_h), interpolation=cv.INTER_AREA)
+            return resized, scale
+        return frame, 1.0
+    
+    def _scale_detections_back(self, detections: list, scale: float) -> None:
+        """Scale detection bboxes back to original frame size (modifies in-place)."""
+        if scale >= 1.0:
+            return
+        for det in detections:
+            if "bbox" in det:
+                x1, y1, x2, y2 = det["bbox"]
+                det["bbox"] = (int(x1 / scale), int(y1 / scale), int(x2 / scale), int(y2 / scale))
+        #---
 
     def calculate_fps(self) -> float:
         """Calculate smoothed FPS using a moving average."""
@@ -74,9 +106,21 @@ class MainController:
                 # Calculate FPS
                 fps = self.calculate_fps()
 
-                # Only run detection every Nth frame for speed
-                if frame_idx % config.PROCESS_EVERY_N_FRAMES == 0:
-                    detections, annotated_frame = self.detector.detect(frame, annotate=True)
+                #---Eric edited*
+                # Only run detection every Nth frame for speed (skip if in OCR cooldown)
+                run_detection = (
+                    self.ocr_cooldown_frames <= 0
+                    and frame_idx % config.PROCESS_EVERY_N_FRAMES == 0
+                )
+
+                if run_detection:
+                    # Resize frame for faster YOLO inference
+                    yolo_frame, scale = self._resize_frame_for_yolo(frame, max_side=1280)
+                    detections, annotated_frame = self.detector.detect(yolo_frame, annotate=True)
+                    
+                    # Scale bboxes back to original frame size
+                    self._scale_detections_back(detections, scale)
+                #---
                     self.last_detections = detections
                     self.last_annotated = annotated_frame
                 else:
@@ -114,10 +158,65 @@ class MainController:
                         window_name="Smart Glasses - Fast Mode",
                     )
 
+                # Keyboard input handling
+                key_press = cv.waitKey(1) & 0xFF
+                
                 # Quit on 'q'
-                if cv.waitKey(1) & 0xFF == ord("q"):
+                if key_press == ord("q"):
                     print("👋 Exiting.")
                     break
+                
+                #---Eric
+                # OCR on 'r' or 'R'
+                if key_press == ord("r") or key_press == ord("R"):
+                    print("\n🔤 OCR triggered! Running fresh detection and processing up to 4 objects...")
+                    try:
+                        # Force fresh YOLO detection for accurate OCR
+                        yolo_frame, scale = self._resize_frame_for_yolo(frame, max_side=1280)
+                        fresh_detections, _ = self.detector.detect(yolo_frame, annotate=False)
+                        
+                        # IMPORTANT: Pass RESIZED frame to OCR (not original)
+                        # Smaller crops = much faster inference, prevents freezing
+                        # Keep detections in resized space (don't scale back)
+                        ocr_results = self.ocr.read_text_from_detections(
+                            frame=yolo_frame,  # Use resized frame for faster OCR
+                            detections=fresh_detections,  # Keep in resized space
+                            frame_idx=frame_idx,
+                            ocr_every_n_frames=1,  # Process immediately
+                            max_crops=4,
+                            min_box_dim=20,
+                        )
+                        
+                        # Briefly pause new detections to reduce contention
+                        self.ocr_cooldown_frames = 2
+
+                        self.ocr_results_cache = ocr_results
+                        
+                        if ocr_results:
+                            print(f"\n📝 OCR Results ({len(ocr_results)} objects):")
+                            for i, result in enumerate(ocr_results, 1):
+                                label = result.get("label", "unknown")
+                                ocr_texts = result.get("ocr", [])
+                                
+                                if ocr_texts:
+                                    print(f"  {i}. {label}:")
+                                    for ocr_item in ocr_texts:
+                                        text = ocr_item.get("text", "")
+                                        conf = ocr_item.get("confidence", 0.0)
+                                        print(f"     → '{text}' (conf: {conf:.2f})")
+                                else:
+                                    print(f"  {i}. {label}: [waiting for OCR processing...]")
+                        else:
+                            print(f"  ℹ️ No objects detected (total detections: {len(detections)})")
+                            print("  ℹ️ OCR will process detected objects when available")
+                    
+                    except Exception as e:
+                        print(f"  ⚠️ OCR error: {e}")
+
+                # Decrement OCR cooldown if active
+                if self.ocr_cooldown_frames > 0:
+                    self.ocr_cooldown_frames -= 1
+                #---
 
                 frame_idx += 1
 
@@ -131,6 +230,11 @@ class MainController:
                         label = str(d.get("label", "object"))
                         conf = float(d.get("confidence", 0.0))
                         print(f"  {label:20s} conf={conf:.2f}")
+
+                    #---Eric
+                    # Periodic cache cleanup to prevent unbounded growth
+                    self.ocr.cleanup_stale_cache()
+                    #---
 
                 # Periodic speech output
                 if frame_idx % config.SPEAK_EVERY_N_FRAMES == 0 and detections:
@@ -157,6 +261,13 @@ class MainController:
                 cv.destroyAllWindows()
             except Exception:  # noqa: BLE001
                 pass
+            #---Eric 
+            # Cleanup OCR engine
+            try:
+                self.ocr.shutdown()
+            except Exception as e:  # noqa: BLE001
+                print(f"⚠️ OCR cleanup warning: {e}")
+            #---
 
             avg_fps = sum(self.fps_queue) / len(self.fps_queue) if self.fps_queue else 0.0
             print("\n📊 Final Stats:")

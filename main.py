@@ -2,7 +2,12 @@
 Main entry point for Smart Glasses Project - FAST VERSION
 Created by Mohammed
 """
-
+# Optimize thread usage for CPU-constrained devices
+#---Eric
+import os
+os.environ.setdefault("OMP_NUM_THREADS", "4")
+os.environ.setdefault("MKL_NUM_THREADS", "4")
+#---
 import sys
 from src.controller import MainController
 
