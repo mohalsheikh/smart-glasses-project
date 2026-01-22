@@ -12,7 +12,7 @@ This module is responsible for:
 from src.camera_handler import CameraHandler
 from src.currency_recognizer import CurrencyRecognizer
 from src.object_detector import ObjectDetector
-from src.ocr_engine import OCREngine
+from src.ocr_engine_2 import OCREngine
 from src.speech_engine import SpeechEngine
 
 import src.utils.config as config
@@ -36,30 +36,31 @@ class MainController:
         # frame variable used to hold the current frame from the camera.
         # initially showing the first frame of the camera to open the window.
         frame = self.camera.capture_and_show_frame()
+        annotated_frame = frame.copy()
 
         # instructions for the user
         print('Press r to process a frame. Press Ctrl+C to exit.')
         while True: # main loop
             if self.camera.wait_key_press('r'):  # if r is pressed...
-                print("r pressed.")
+                # print("r pressed.")
                 # first, the camera handler obtains a frame from the camera...
                 frame = self.camera.capture_frame() 
-                print("Got frame from camera.")
+                # print("Got frame from camera.")
 
                 # next, the object detector detects objects inside of the frame.
                 # from this we get the detection results and update the frame with annotations.
-                detections, frame = self.detector.detect(frame, annotate=True)
-                print("Detection complete.")
+                detections, annotated_frame = self.detector.detect(frame, annotate=True)
+                # print("Detection complete.")
 
-                # TODO ocr here eventually when that's done...
+                print(self.ocr._extract_text(frame))
 
                 # finally, we summarize the detections and speak them out loud.
                 description = summarize_detections(detections, frame_width=self.camera_frame_width)
-                print("Generated description.")
+                # print("Generated description.")
 
                 self.speech.speak(description)
 
                 print(f"Frame processed: {description}")
             
-            self.camera.show_image(frame) # just keep showing the last frame so that the window doesn't say not responding.
+            self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.
                 

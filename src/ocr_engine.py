@@ -60,7 +60,7 @@ class OCREngine:
         self.cache_ttl = cache_ttl
         
         # Initialize reader in background to avoid blocking
-        self.reader = None
+        self.reader = _get_reader(gpu=self.use_gpu)
         self.reader_ready = threading.Event()
         self.reader_init_thread = threading.Thread(target=self._init_reader, daemon=True)
         self.reader_init_thread.start()
@@ -321,23 +321,23 @@ class OCREngine:
         Returns:
             Concatenated text from all detected text regions
         """
-        try:
-            preprocessed = _preprocess_crop(frame, fast=True)
-            raw_results = self.reader.readtext(preprocessed)
-            
-            texts = []
-            for item in raw_results:
-                try:
-                    _, text, conf = item
-                    if conf >= config.DEFAULT_OCR_CONFIDENCE_THRESHOLD:
-                        texts.append(text)
-                except Exception:
-                    continue
-            
-            return " ".join(texts) if texts else ""
+        # try:
+        preprocessed = _preprocess_crop(frame, fast=True)
+        raw_results = self.reader.readtext(preprocessed)
+        print(raw_results)
+        texts = []
+        for item in raw_results:
+            try:
+                _, text, conf = item
+                if conf >= config.DEFAULT_OCR_CONFIDENCE_THRESHOLD:
+                    texts.append(text)
+            except Exception:
+                continue
         
-        except Exception:
-            return ""
+        return " ".join(texts) if texts else ""
+        
+        # except Exception:
+        #     return ""
     
     def cleanup_stale_cache(self, max_age: float = None) -> int:
         """Remove stale entries from cache.
