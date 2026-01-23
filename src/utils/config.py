@@ -20,7 +20,7 @@ DEFAULT_FRAME_HEIGHT: int = 480
 # YOLO object detection settings - OPTIMIZED FOR SPEED
 # ---------------------------------------------------------------------------
 
-DEFAULT_MODEL_NAME: str = "yolov8n.pt"  
+DEFAULT_MODEL_NAME: str = "yolov8n-oiv7.pt"  
 
 # Lower confidence to catch more objects
 DEFAULT_YOLO_CONFIDENCE_THRESHOLD: float = 0.20  # Balanced for speed/accuracy
