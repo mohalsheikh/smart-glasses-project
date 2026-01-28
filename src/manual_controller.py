@@ -12,11 +12,12 @@ This module is responsible for:
 from src.camera_handler import CameraHandler
 from src.currency_recognizer import CurrencyRecognizer
 from src.object_detector import ObjectDetector
-from src.ocr_engine_2 import OCREngine
+from src.ocr_engine import OCREngine
 from src.speech_engine import SpeechEngine
 
 import src.utils.config as config
 from src.utils.object_description import summarize_detections
+from src.utils.feedback_utils import format_ocr_feedback
 
 class MainController:
     def __init__(self) -> None:
@@ -52,7 +53,15 @@ class MainController:
                 detections, annotated_frame = self.detector.detect(frame, annotate=True)
                 # print("Detection complete.")
 
-                print(self.ocr._extract_text(frame))
+                # Run OCR (Extract text) on the full frame and 
+                # format confidence-based feedback for the user based on annotated confidence values.
+                print("🔍 Running OCR on frame...")
+                ocr_result = self.ocr.extract_text_with_confidence(frame)
+                ocr_feedback = format_ocr_feedback(ocr_result)
+                if ocr_result.get("text"):
+                    print(ocr_feedback)
+                else:
+                    print("❌🔍 No text detected.\n")
 
                 # finally, we summarize the detections and speak them out loud.
                 description = summarize_detections(detections, frame_width=self.camera_frame_width)
