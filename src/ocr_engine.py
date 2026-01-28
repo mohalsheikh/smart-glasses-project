@@ -140,6 +140,8 @@ class OCREngine:
             "count": conf_metrics["count"]
         }
 ############################################################################################
+    # TODO "crop" is not a thing. It seems here that it is supposed to be a np.ndarray representing a cropped portion of the frame,
+    # specified by the bounding box that YOLO puts around it. However you need to create this crop yourself from the bbox coordinates inside of detections.
     def attach_crop_text_to_detected_objects(self, detections: List[Dict[str, Any]], min_conf: float = 0.45) -> List[Dict[str, Any]]:
         """
         Adds the formatted text to the detected object data 

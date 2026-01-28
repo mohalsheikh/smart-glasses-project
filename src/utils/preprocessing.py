@@ -69,7 +69,7 @@ def deskew_image(image):
         # before we find the largest contour we want to convex hull all contours to close gaps.
         hulls = [cv.convexHull(c) for c in contours]
 
-        # we assume the largest contour by area is around the poster.
+        # we assume the largest contour by area is around the object of interest.
         largest_contour = max(hulls, key=cv.contourArea)
         
         # get the minimum area rectangle that bounds the largest contour
