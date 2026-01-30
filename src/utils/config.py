@@ -33,7 +33,7 @@ DEFAULT_TRACKER: str = "bytetrack.yaml"
 DEFAULT_MAX_DETECTIONS: int = 100
 
 # ---------------------------------------------------------------------------
-# PERFORMANCE SETTINGS - KEY FOR SPEED
+# AUTO CONTROLLER PERFORMANCE SETTINGS - KEY FOR SPEED (these are irrelevant to manual controller)
 # ---------------------------------------------------------------------------
 
 # Process every Nth frame (HUGE speed boost)

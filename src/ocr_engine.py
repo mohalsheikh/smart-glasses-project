@@ -142,19 +142,23 @@ class OCREngine:
 ############################################################################################
     # TODO "crop" is not a thing. It seems here that it is supposed to be a np.ndarray representing a cropped portion of the frame,
     # specified by the bounding box that YOLO puts around it. However you need to create this crop yourself from the bbox coordinates inside of detections.
-    def attach_crop_text_to_detected_objects(self, detections: List[Dict[str, Any]], min_conf: float = 0.45) -> List[Dict[str, Any]]:
+    def attach_crop_text_to_detected_objects(self, frame: np.ndarray, detections: List[Dict[str, Any]], min_conf: float = 0.45) -> List[Dict[str, Any]]:
         """
         Adds the formatted text to the detected object data 
         via a "ocr_text" field where the extracted text is stored.
         Expects each detection to have a "crop" (np.ndarray) field.
         """
+        np_float_to_int = lambda x: int(x.item())
+
         for det in detections:
-            crop = det.get("crop")
-            # `crop` is a NumPy array representing the pixel region of a detected object.
+            coords = (np_float_to_int(det["bbox"][0]), np_float_to_int(det["bbox"][1]), # x1, y1
+                      np_float_to_int(det["bbox"][2]), np_float_to_int(det["bbox"][3])) # x2, y2
+            
+            # grabs the crop from the frame using bbox coords.
             # OCR is run only on this cropped image, not the full frame.
-            if crop is not None and isinstance(crop, np.ndarray):
-                det["ocr_text"] = self.extract_text_as_string(crop, min_conf=min_conf)
-            else:
-                det["ocr_text"] = ""
+            crop = frame[coords[1]:coords[3], coords[0]:coords[2]] 
+
+            det["ocr_text"] = self.extract_text_as_string(crop, min_conf=min_conf)
+            
         return detections
 ############################################################################################

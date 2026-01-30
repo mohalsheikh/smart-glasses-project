@@ -16,8 +16,7 @@ from src.ocr_engine import OCREngine
 from src.speech_engine import SpeechEngine
 
 import src.utils.config as config
-from src.utils.object_description import summarize_detections
-from src.utils.feedback_utils import format_ocr_feedback
+from src.utils.object_description import summarize_detections, format_ocr_feedback
 
 class MainController:
     def __init__(self) -> None:
@@ -72,4 +71,3 @@ class MainController:
                 print(f"Frame processed: {description}")
             
             self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.
-                
