@@ -51,12 +51,16 @@ def gaussian_blur(image):
 def dilate(image, iterations=config.DILATION_ITERATIONS):
     return cv.dilate(image, None, iterations=iterations)
 
+# applies canny edge detection to image.
+def canny_edge_detection(image, threshold1=100, threshold2=200):
+    return cv.Canny(image, threshold1, threshold2)
+
 # Deskew an image such that what we presume to be the object of interest is rotated upright.
 def deskew_image(image):
     # first, we need to determine if the image needs deskewing.
     # we start by converting to grayscale and applying edge detection.
     gray = bgr_to_gray(image)
-    edges = cv.Canny(gray, 100, 200)
+    edges = canny_edge_detection(gray)
     edges = dilate(edges, iterations=1) # enhance edges
 
     # now we want to find the contours in the edged image.
