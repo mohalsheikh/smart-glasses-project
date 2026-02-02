@@ -39,17 +39,29 @@ def gray_to_rgb(image):
 def hsv_to_rgb(image):
     return cv.cvtColor(image, cv.COLOR_HSV2RGB)
 
-# Sharpen an image using a predefined kernel.
+# Sharpen an image.
 def sharpen_image(image):
     return cv.filter2D(image, -1, config.SHARP)
 
-# Apply Gaussian blur to an image using predefined settings.
+# Apply Gaussian blur to an image.
 def gaussian_blur(image):
-    return cv.GaussianBlur(image, config.GAUSSIAN_BLUR_KERNEL_SIZE, config.GAUSSIAN_BLUR_SIGMA_X, config.GAUSSIAN_BLUR_SIGMA_Y)
+    return cv.GaussianBlur(image, config.GAUSSIAN_BLUR_KERNEL_SIZE, config.GAUSSIAN_BLUR_SIGMA_X, config.GAUSSIAN_BLUR_SIGMA_Y) #TODO get rid config vars
 
-# applies dilation to an image using predefined settings.
-def dilate(image, iterations=config.DILATION_ITERATIONS):
-    return cv.dilate(image, None, iterations=iterations)
+# applies dilation to an image.
+def dilate(image, kernel=None, iterations=config.DILATION_ITERATIONS):  #TODO get rid of dilation iterations in config
+    return cv.dilate(image, kernel, iterations=iterations)
+
+# applies erosion to an image.
+def erode(image, kernel=None, iterations=1):
+    return cv.erode(image, kernel, iterations=iterations)
+
+# applies dilation and then erosion to an image.
+def open_image(image, kernel=None, iterations=1):
+    return cv.morphologyEx(image, cv.MORPH_OPEN, kernel, iterations=iterations)
+
+# applies erosion and then dilation to an image.
+def close_image(image, kernel=None, iterations=1):
+    return cv.morphologyEx(image, cv.MORPH_CLOSE, kernel, iterations=iterations)
 
 # applies canny edge detection to image.
 def canny_edge_detection(image, threshold1=100, threshold2=200):
