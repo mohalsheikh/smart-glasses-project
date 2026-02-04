@@ -1,5 +1,5 @@
 """
-Currency Recognition Module for VisionAssist
+Currency Recognition Module
 =============================================
 Created by Mohammed - CBU Capstone Project
 
