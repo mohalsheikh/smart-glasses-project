@@ -42,10 +42,40 @@ class MainController:
         print('Press r to process a frame. Press Ctrl+C to exit.')
         while True: # main loop
             if self.camera.wait_key_press('r'):  # if r is pressed...
+
+
                 # print("r pressed.")
                 # first, the camera handler obtains a frame from the camera...
                 frame = self.camera.capture_frame() 
                 # print("Got frame from camera.")
+
+
+                # =========================================================================================
+                # TEST: Per-object OCR attachment
+                # =========================================================================================
+                detections, annotated_frame = self.detector.detect(frame, annotate=True)
+
+                try:
+                    detections = self.ocr.attach_crop_text_to_detected_objects(frame, detections)
+
+                    print("\n=== Per-object OCR test ===")
+                    for i, det in enumerate(detections):
+                        print(
+                            f"[{i}] "
+                            f"label={det.get('label')} "
+                            f"confidence={det.get('confidence')} "
+                            f"bbox={det.get('bbox')} "
+                            f"ocr_text='{det.get('ocr_text', '')}'"
+                        )
+                    print("=== End per-object OCR test ===\n")
+
+                except Exception as e:
+                    print(f"[Per-object OCR test ERROR] {type(e).__name__}: {e}")
+                # =========================================================================================
+                # Results: Successful attachment of OCR text to detected objects. But might have bad confidence keys.   
+                # ==========================================================================================
+
+
 
                 # next, the object detector detects objects inside of the frame.
                 # from this we get the detection results and update the frame with annotations.

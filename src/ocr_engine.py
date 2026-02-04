@@ -140,12 +140,10 @@ class OCREngine:
             "count": conf_metrics["count"]
         }
 ############################################################################################
-    # TODO test this function and complete it if it doesn't work yet. try it out inside of manual controller.
     def attach_crop_text_to_detected_objects(self, frame: np.ndarray, detections: List[Dict[str, Any]], min_conf: float = 0.45) -> List[Dict[str, Any]]:
         """
-        Adds the formatted text to the detected object data 
-        via a "ocr_text" field where the extracted text is stored.
-        Expects each detection to have a "crop" (np.ndarray) field.
+        For each detected object's bounding-box crop, attaches the extracted
+        text to the detection dictionary using the "ocr_text" field.
         """
         np_float_to_int = lambda x: int(x.item())
 
