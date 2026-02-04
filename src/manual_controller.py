@@ -22,7 +22,7 @@ class MainController:
     def __init__(self) -> None:
         # Core components
         self.camera = CameraHandler()
-        self.detector = ObjectDetector()
+        self.detector = ObjectDetector(model_name="training\models\currency_detector.pt")
         self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
         self.ocr = OCREngine() # unfinished.
         self.speech = SpeechEngine()
@@ -43,18 +43,19 @@ class MainController:
         while True: # main loop
             if self.camera.wait_key_press('r'):  # if r is pressed...
 
-
                 # print("r pressed.")
                 # first, the camera handler obtains a frame from the camera...
                 frame = self.camera.capture_frame() 
                 # print("Got frame from camera.")
 
+                # next, the object detector detects objects inside of the frame.
+                # from this we get the detection results and update the frame with annotations.
+                detections, annotated_frame = self.detector.detect(frame, annotate=True)
+                # print("Detection complete.")
 
                 # =========================================================================================
                 # TEST: Per-object OCR attachment
                 # =========================================================================================
-                detections, annotated_frame = self.detector.detect(frame, annotate=True)
-
                 try:
                     detections = self.ocr.attach_crop_text_to_detected_objects(frame, detections)
 
@@ -74,13 +75,6 @@ class MainController:
                 # =========================================================================================
                 # Results: Successful attachment of OCR text to detected objects. But might have bad confidence keys.   
                 # ==========================================================================================
-
-
-
-                # next, the object detector detects objects inside of the frame.
-                # from this we get the detection results and update the frame with annotations.
-                detections, annotated_frame = self.detector.detect(frame, annotate=True)
-                # print("Detection complete.")
 
                 # Run OCR (Extract text) on the full frame and 
                 # format confidence-based feedback for the user based on annotated confidence values.

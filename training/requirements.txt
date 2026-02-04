@@ -1,0 +1,32 @@
+# VisionAssist Currency Model Training Requirements
+# Install with: pip install -r requirements.txt
+
+# Core ML frameworks (install PyTorch with CUDA first!)
+# For CUDA 11.8 (most common):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
+# For CUDA 12.1:
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# YOLOv8
+ultralytics>=8.0.0
+
+# Dataset management
+roboflow>=1.0.0
+
+# Computer vision
+opencv-python>=4.8.0
+
+# Data processing
+numpy>=1.24.0
+pandas>=2.0.0
+
+# Visualization (optional, for training plots)
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Progress bars
+tqdm>=4.65.0
+
+# For model export
+onnx>=1.14.0
+onnxruntime>=1.15.0

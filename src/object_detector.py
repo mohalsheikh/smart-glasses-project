@@ -58,6 +58,8 @@ class ObjectDetector:
             self.model = YOLO(model_name)
         except Exception as e:
             raise RuntimeError(f"Failed to load model '{model_name}' with exception: {e}\nMake sure that you specify a valid file path to a YOLO model.")
+        
+        # print(self.model.names)
 
     # wrapper for the model's track method with the parameters set in __init__.
     # the yolo track function, when given one frame, returns a list of one result every time if it is successful,
