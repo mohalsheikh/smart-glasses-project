@@ -18,6 +18,12 @@ from src.speech_engine import SpeechEngine
 import src.utils.config as config
 from src.utils.object_description import summarize_detections, format_ocr_feedback
 
+# voice input is optional (only used in manual mode for now)
+try:
+    from src.voice_input import VoiceInput
+except Exception:
+    VoiceInput = None  # type: ignore
+
 class MainController:
     def __init__(self) -> None:
         # Core components
@@ -26,6 +32,22 @@ class MainController:
         self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
         self.ocr = OCREngine() # unfinished.
         self.speech = SpeechEngine()
+
+        # Optional: offline speech-to-text for manual commands
+        self.voice = None
+        if getattr(config, "VOICE_INPUT_ENABLED", False) and VoiceInput is not None:
+            try:
+                self.voice = VoiceInput(
+                    model_path=config.VOSK_MODEL_PATH,
+                    device_index=config.VOICE_INPUT_DEVICE_INDEX,
+                    target_rate=config.VOICE_INPUT_TARGET_RATE,
+                    block_size=config.VOICE_INPUT_BLOCK_SIZE,
+                )
+                print("🎙️ Voice input ready (Vosk)")
+            except Exception as e:
+                # Keep the rest of the system working even if voice isn't set up.
+                print(f"⚠️ Voice input disabled: {e}")
+                self.voice = None
 
         self.camera_frame_width = self.camera.frame_width # frame width from camera handler
 
@@ -36,10 +58,13 @@ class MainController:
         # frame variable used to hold the current frame from the camera.
         # initially showing the first frame of the camera to open the window.
         frame = self.camera.capture_and_show_frame()
-        annotated_frame = frame.copy()
+        annotated_frame = frame.copy() if frame is not None else None
 
         # instructions for the user
-        print('Press r to process a frame. Press Ctrl+C to exit.')
+        if self.voice is None:
+            print('Press r to process a frame. Press Ctrl+C to exit.')
+        else:
+            print('Press r to take a frame, then say: "hey what is in front of me". Press Ctrl+C to exit.')
         while True: # main loop
             if self.camera.wait_key_press('r'):  # if r is pressed...
 
@@ -48,6 +73,28 @@ class MainController:
                 # first, the camera handler obtains a frame from the camera...
                 frame = self.camera.capture_frame() 
                 # print("Got frame from camera.")
+
+                if frame is None:
+                    print("⚠️ No frame from camera.")
+                    continue
+
+                # If voice is enabled, start listening AFTER we take the frame.
+                # This matches the behavior you asked for (capture first, then ask the question).
+                if self.voice is not None:
+                    print('\n🎙️ Listening... (say: "hey what is in front of me")')
+                    transcript = self.voice.listen_once(timeout_seconds=config.VOICE_INPUT_TIMEOUT_SECONDS)
+                    transcript = transcript.strip()
+
+                    if not transcript:
+                        print("🎙️ No speech detected.")
+                        self.speech.speak("I didn't hear a command.")
+                        continue
+
+                    print(f"🎙️ Heard: {transcript}")
+                    if not self.voice.matches_any(transcript, config.VOICE_DESCRIBE_COMMANDS):
+                        print("🎙️ Command not recognized. Try again.")
+                        self.speech.speak("Sorry, I didn't catch that.")
+                        continue
 
 
                 # =========================================================================================
@@ -75,13 +122,6 @@ class MainController:
                 # Results: Successful attachment of OCR text to detected objects. But might have bad confidence keys.   
                 # ==========================================================================================
 
-
-
-                # next, the object detector detects objects inside of the frame.
-                # from this we get the detection results and update the frame with annotations.
-                detections, annotated_frame = self.detector.detect(frame, annotate=True)
-                # print("Detection complete.")
-
                 # Run OCR (Extract text) on the full frame and 
                 # format confidence-based feedback for the user based on annotated confidence values.
                 print("🔍 Running OCR on frame...")
@@ -100,4 +140,5 @@ class MainController:
 
                 print(f"Frame processed: {description}")
             
-            self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.
+            if annotated_frame is not None:
+                self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.
