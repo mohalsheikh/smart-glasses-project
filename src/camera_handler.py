@@ -4,14 +4,16 @@ Created by Ethan
 """
 
 import cv2 as cv
-import src.utils.config as config
+from src.utils.config import DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT
+
+DEFAULT_CAMERA_INDEX: int = 0
 
 class CameraHandler:
     def __init__(
             self,
-            camera_index: int = config.DEFAULT_CAMERA_INDEX,
-            frame_width: int = config.DEFAULT_FRAME_WIDTH,
-            frame_height: int = config.DEFAULT_FRAME_HEIGHT
+            camera_index: int = DEFAULT_CAMERA_INDEX,
+            frame_width: int = DEFAULT_FRAME_WIDTH,
+            frame_height: int = DEFAULT_FRAME_HEIGHT
             ):
         
         # parameters cannot be None and must be of the types specified in the function signature.

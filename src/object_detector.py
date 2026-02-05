@@ -4,19 +4,25 @@ Created by Ethan
 """
 
 from ultralytics import YOLO
-import src.utils.config as config
+from src.utils.config import DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT
 import numpy as np
+
+DEFAULT_MODEL_NAME: str = "yolov8n-oiv7.pt"
+DEFAULT_YOLO_CONFIDENCE_THRESHOLD: float = 0.20 
+DEFAULT_IOU_THRESHOLD: float = 0.45
+DEFAULT_TRACKER: str = "bytetrack.yaml"
+DEFAULT_MAX_DETECTIONS: int = 100
 
 class ObjectDetector:
     # initializes the detector with specified parameters or defaults from config.
     def __init__(
             self,
-            model_name: str = config.DEFAULT_MODEL_NAME, # path to the YOLO model
-            conf: float = config.DEFAULT_YOLO_CONFIDENCE_THRESHOLD, # confidence threshold
-            iou: float = config.DEFAULT_IOU_THRESHOLD, # IoU threshold
-            imgsz: int = config.DEFAULT_FRAME_WIDTH if config.DEFAULT_FRAME_WIDTH > config.DEFAULT_FRAME_HEIGHT else config.DEFAULT_FRAME_HEIGHT, # image size for model input
-            tracker: str = config.DEFAULT_TRACKER, # the tracker we're using
-            max_det: int = config.DEFAULT_MAX_DETECTIONS # maximum number of objects to detect in a frame
+            model_name: str = DEFAULT_MODEL_NAME, # path to the YOLO model
+            conf: float = DEFAULT_YOLO_CONFIDENCE_THRESHOLD, # confidence threshold
+            iou: float = DEFAULT_IOU_THRESHOLD, # IoU threshold
+            imgsz: int = DEFAULT_FRAME_WIDTH if DEFAULT_FRAME_WIDTH > DEFAULT_FRAME_HEIGHT else DEFAULT_FRAME_HEIGHT, # image size for model input
+            tracker: str = DEFAULT_TRACKER, # the tracker we're using
+            max_det: int = DEFAULT_MAX_DETECTIONS # maximum number of objects to detect in a frame
         ):
 
         # parameters cannot be None and must be of the types specified in the function signature.

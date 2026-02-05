@@ -22,7 +22,7 @@ class MainController:
     def __init__(self) -> None:
         # Core components
         self.camera = CameraHandler()
-        self.detector = ObjectDetector(model_name="training\models\currency_detector.pt")
+        self.detector = ObjectDetector()
         self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
         self.ocr = OCREngine() # unfinished.
         self.speech = SpeechEngine()
@@ -30,7 +30,6 @@ class MainController:
         self.camera_frame_width = self.camera.frame_width # frame width from camera handler
 
         print("⚡ MANUAL Smart Glasses System Initialized")
-        print(f"📊 Model: {config.DEFAULT_MODEL_NAME}")
 
     def run(self) -> None:    
         # frame variable used to hold the current frame from the camera.

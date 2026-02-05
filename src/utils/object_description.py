@@ -3,6 +3,20 @@
 from typing import List, Dict, Any, Optional
 import src.utils.config as config
 
+MAX_SPEECH_ITEMS: int = 5
+
+# Small objects that need lower confidence
+SMALL_OBJECTS: set = {
+    "Pen", "Pencil", "Toothbrush", "Spoon", "Fork", "Knife", 
+    "Remote control", "Computer mouse", "Glasses", "Watch"
+}
+
+CONFIDENCE_BY_CATEGORY: dict = {
+    "small_objects": 0.15,
+    "priority_objects": 0.20,
+    "general_objects": 0.25,
+}
+
 # Ignore noisy labels
 IGNORE_LABELS = {
     "Clothing", "Human arm", "Human hair", "Human leg", "Human body",
@@ -66,12 +80,12 @@ def add_indefinite_article(label: str) -> str:
 
 def get_confidence_threshold(label: str) -> float:
     """Get confidence threshold based on object type."""
-    if label in config.SMALL_OBJECTS:
-        return config.CONFIDENCE_BY_CATEGORY["small_objects"]
+    if label in SMALL_OBJECTS:
+        return CONFIDENCE_BY_CATEGORY["small_objects"]
     elif label in PRIORITY_LABELS:
-        return config.CONFIDENCE_BY_CATEGORY["priority_objects"]
+        return CONFIDENCE_BY_CATEGORY["priority_objects"]
     else:
-        return config.CONFIDENCE_BY_CATEGORY["general_objects"]
+        return CONFIDENCE_BY_CATEGORY["general_objects"]
 
 
 def summarize_detections(
@@ -83,7 +97,7 @@ def summarize_detections(
     Fast summary - no distance estimation.
     """
     if max_items is None:
-        max_items = config.MAX_SPEECH_ITEMS
+        max_items = MAX_SPEECH_ITEMS
 
     # Filter by adaptive confidence
     filtered = []

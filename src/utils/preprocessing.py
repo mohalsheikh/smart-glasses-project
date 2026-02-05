@@ -40,15 +40,21 @@ def hsv_to_rgb(image):
     return cv.cvtColor(image, cv.COLOR_HSV2RGB)
 
 # Sharpen an image.
-def sharpen_image(image):
-    return cv.filter2D(image, -1, config.SHARP)
+def sharpen_image(
+        image, 
+        sharp_kernel=np.array([
+            [0, -1, 0],
+            [-1, 5, -1],
+            [0, -1, 0],
+        ])):
+    return cv.filter2D(image, -1, sharp_kernel)
 
 # Apply Gaussian blur to an image.
-def gaussian_blur(image):
-    return cv.GaussianBlur(image, config.GAUSSIAN_BLUR_KERNEL_SIZE, config.GAUSSIAN_BLUR_SIGMA_X, config.GAUSSIAN_BLUR_SIGMA_Y) #TODO get rid config vars
+def gaussian_blur(image, kernel_size=(3,3), sigma_x=0.0, sigma_y=0.0):
+    return cv.GaussianBlur(image, kernel_size, sigma_x, sigma_y)
 
 # applies dilation to an image.
-def dilate(image, kernel=None, iterations=config.DILATION_ITERATIONS):  #TODO get rid of dilation iterations in config
+def dilate(image, kernel=None, iterations=1):
     return cv.dilate(image, kernel, iterations=iterations)
 
 # applies erosion to an image.
