@@ -47,13 +47,17 @@ def sharpen_image(image):
 def gaussian_blur(image):
     return cv.GaussianBlur(image, config.GAUSSIAN_BLUR_KERNEL_SIZE, config.GAUSSIAN_BLUR_SIGMA_X, config.GAUSSIAN_BLUR_SIGMA_Y)
 
+# applies dilation to an image using predefined settings.
+def dilate(image, iterations=config.DILATION_ITERATIONS):
+    return cv.dilate(image, None, iterations=iterations)
+
 # Deskew an image such that what we presume to be the object of interest is rotated upright.
 def deskew_image(image):
     # first, we need to determine if the image needs deskewing.
     # we start by converting to grayscale and applying edge detection.
     gray = bgr_to_gray(image)
     edges = cv.Canny(gray, 100, 200)
-    edges = cv.dilate(edges, None, iterations=1) # enhance edges
+    edges = dilate(edges, iterations=1) # enhance edges
 
     # now we want to find the contours in the edged image.
     contours, _ = cv.findContours(edges, cv.RETR_LIST, cv.CHAIN_APPROX_SIMPLE)
@@ -65,7 +69,7 @@ def deskew_image(image):
         # before we find the largest contour we want to convex hull all contours to close gaps.
         hulls = [cv.convexHull(c) for c in contours]
 
-        # we assume the largest contour by area is around the poster.
+        # we assume the largest contour by area is around the object of interest.
         largest_contour = max(hulls, key=cv.contourArea)
         
         # get the minimum area rectangle that bounds the largest contour

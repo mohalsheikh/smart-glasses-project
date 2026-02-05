@@ -20,7 +20,7 @@ DEFAULT_FRAME_HEIGHT: int = 480
 # YOLO object detection settings - OPTIMIZED FOR SPEED
 # ---------------------------------------------------------------------------
 
-DEFAULT_MODEL_NAME: str = "yolov8s-oiv7.pt"  # NANO model - 3x faster than small!
+DEFAULT_MODEL_NAME: str = "yolov8n-oiv7.pt"  
 
 # Lower confidence to catch more objects
 DEFAULT_YOLO_CONFIDENCE_THRESHOLD: float = 0.20  # Balanced for speed/accuracy
@@ -33,7 +33,7 @@ DEFAULT_TRACKER: str = "bytetrack.yaml"
 DEFAULT_MAX_DETECTIONS: int = 100
 
 # ---------------------------------------------------------------------------
-# PERFORMANCE SETTINGS - KEY FOR SPEED
+# AUTO CONTROLLER PERFORMANCE SETTINGS - KEY FOR SPEED (these are irrelevant to manual controller)
 # ---------------------------------------------------------------------------
 
 # Process every Nth frame (HUGE speed boost)
@@ -87,7 +87,7 @@ OCR_WHITELIST = (
 )
 
 # ---------------------------------------------------------------------------
-# Preprocessing (DISABLED for speed)
+# Preprocessing
 # ---------------------------------------------------------------------------
 
 GAUSSIAN_BLUR_KERNEL_SIZE: tuple = (3, 3)
@@ -99,6 +99,8 @@ SHARP = np.array([
     [-1, 5, -1],
     [0, -1, 0],
 ])
+
+DILATION_ITERATIONS: int = 1
 
 # ---------------------------------------------------------------------------
 # Speech Settings
