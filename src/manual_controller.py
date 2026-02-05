@@ -23,7 +23,7 @@ class MainController:
         # Core components
         self.camera = CameraHandler()
         self.detector = ObjectDetector()
-        self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
+        # self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
         self.ocr = OCREngine() # unfinished.
         self.speech = SpeechEngine()
 
