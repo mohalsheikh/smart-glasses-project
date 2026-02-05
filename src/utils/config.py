@@ -29,7 +29,7 @@ VOICE_INPUT_ENABLED: bool = True
 
 # Absolute path to your Vosk model folder (must contain am/, conf/, graph/)
 # NOTE: change this to where YOU unzipped the model.
-VOSK_MODEL_PATH: str = r"C:\\Repos\\vosk-model-en-us-0.22\\vosk-model-en-us-0.22"
+VOSK_MODEL_PATH: str = r"C:\\Repos\\vosk-model-small-en-us-0.15\\vosk-model-small-en-us-0.15"
 
 # Mic device index. Set to None to use your system default microphone.
 VOICE_INPUT_DEVICE_INDEX: int | None = None

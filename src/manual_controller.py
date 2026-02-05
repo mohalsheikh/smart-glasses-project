@@ -16,6 +16,7 @@ from src.ocr_engine import OCREngine
 from src.speech_engine import SpeechEngine
 
 import src.utils.config as config
+import cv2 as cv
 from src.utils.object_description import summarize_detections, format_ocr_feedback
 
 # voice input is optional (only used in manual mode for now)
@@ -28,8 +29,8 @@ class MainController:
     def __init__(self) -> None:
         # Core components
         self.camera = CameraHandler()
-        self.detector = ObjectDetector()
-        self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
+        self.detector = ObjectDetector(model_name="training/models/currency_detector.pt")
+        # self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
         self.ocr = OCREngine() # unfinished.
         self.speech = SpeechEngine()
 
@@ -56,7 +57,11 @@ class MainController:
     def run(self) -> None:    
         # frame variable used to hold the current frame from the camera.
         # initially showing the first frame of the camera to open the window.
-        frame = self.camera.capture_and_show_frame()
+        # frame = self.camera.capture_and_show_frame()
+
+        frame = cv.imread("5dollartest.jpg") # for testing with a static image instead of the camera feed.
+        self.camera.show_image(frame) # show the test image in the window.
+        
         annotated_frame = frame.copy() if frame is not None else None
 
         # instructions for the user
@@ -67,10 +72,10 @@ class MainController:
         while True: # main loop
             if self.camera.wait_key_press('r'):  # if r is pressed...
 
-                # print("r pressed.")
-                # first, the camera handler obtains a frame from the camera...
-                frame = self.camera.capture_frame() 
-                # print("Got frame from camera.")
+                # # print("r pressed.")
+                # # first, the camera handler obtains a frame from the camera...
+                # frame = self.camera.capture_frame() 
+                # # print("Got frame from camera.")
 
                 if frame is None:
                     print("⚠️ No frame from camera.")
