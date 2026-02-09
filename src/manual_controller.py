@@ -66,6 +66,7 @@ class MainController:
             print('Press r to take a frame, then say: "hey what is in front of me". Press Ctrl+C to exit.')
         while True: # main loop
             if self.camera.wait_key_press('r'):  # if r is pressed...
+                self.speech.speak("I'm listening!")
 
                 # print("r pressed.")
                 # first, the camera handler obtains a frame from the camera...
