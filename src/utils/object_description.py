@@ -198,6 +198,7 @@ def _construct_description(filtered_detections: List[Dict[str, Optional[str]]]) 
                 phrase = f"{label_with_article} in front of you"
 
         phrases.append(phrase)
+        
 
     # Natural sentence
     if len(phrases) == 1:

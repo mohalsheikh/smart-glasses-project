@@ -16,7 +16,7 @@ from src.ocr_engine import OCREngine
 from src.speech_engine import SpeechEngine
 
 import src.utils.config as config
-from src.utils.object_description_prev import summarize_detections, format_ocr_feedback
+from src.utils.object_description import summarize_detections, format_ocr_feedback
 
 # voice input is optional (only used in manual mode for now)
 try:
