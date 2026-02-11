@@ -1,6 +1,5 @@
 # src/utils/object_description.py
 
-from enum import Enum
 from typing import List, Dict, Any, Optional
 import src.utils.config as config
 
@@ -44,30 +43,17 @@ PRIORITY_LABELS = {
     "Toilet", "Sink", "Bed", "Couch"
 }
 
-class Direction(Enum):
-    LEFT = 1
-    FRONT = 2
-    RIGHT = 3
 
-def normalize_label(label: str) -> Optional[str]:
-    """
-    Label normalization.
-
-    Args: 
-        label: from object detector output
-
-    Returns: 
-        normalized label based on contents of MERGE_LABELS and IGNORE_LABELS. 
-        If label is in IGNORE_LABELS, returns None to indicate it should be skipped.
-    """
-    if label in IGNORE_LABELS:
+def normalize_label(label: Optional[str]) -> Optional[str]:
+    """Normalize labels - fast version."""
+    if label in IGNORE_LABELS or label is None:
         return None
     if label in MERGE_LABELS:
         return MERGE_LABELS[label]
     return label
 
 
-def direction_from_center(center, frame_width: int) -> Direction:
+def direction_from_center(center, frame_width: int) -> Optional[str]:
     """Get direction from center position."""
     if center is None or frame_width <= 0:
         return None
@@ -77,11 +63,11 @@ def direction_from_center(center, frame_width: int) -> Direction:
     right_thresh = 2 * frame_width / 3
 
     if x < left_thresh:
-        return Direction.LEFT
+        return "on your left"
     elif x > right_thresh:
-        return Direction.RIGHT
+        return "on your right"
     else:
-        return Direction.FRONT
+        return "in front of you"
 
 
 def add_indefinite_article(label: str) -> str:
@@ -101,103 +87,65 @@ def get_confidence_threshold(label: str) -> float:
     else:
         return CONFIDENCE_BY_CATEGORY["general_objects"]
 
+
 def summarize_detections(
     detections: List[Dict[str, Any]],
     frame_width: int,
-    max_items: int = MAX_SPEECH_ITEMS,
+    max_items: int | None = None,
 ) -> str:
     """
-    Summarizes detections into a natural language description.
-
-    Args:
-        detections: List of detection dicts from object detector.
-        frame_width: Width of the camera frame for direction estimation
-        max_items: Maximum number of objects to include in the summary
-    
-    Returns:
-        Natural language description of detected objects and their directions.
+    Fast summary - no distance estimation.
     """
-    filtered_detections = _format_detections(detections, frame_width, max_items)
+    if max_items is None:
+        max_items = MAX_SPEECH_ITEMS
 
-    if not filtered_detections:
-        return "I don't see any objects clearly."
-    else:
-        return _construct_description(filtered_detections)
-    
-
-def _format_detections(
-    detections: List[Dict[str, Any]],
-    frame_width: int,
-    max_items: int = MAX_SPEECH_ITEMS,
-) -> List[Dict[str, Optional[str]]]:
-    """
-    Formats detections into a list of dicts with label and direction, which is to be used for summarization.
-    """
     # Filter by adaptive confidence
     filtered = []
-
     for d in detections:
-        raw_label = d.get("label")
-        normalized_label = normalize_label(raw_label)
-
-        # continue to next detection if this one is empty or should be ignored.
-        if normalized_label is None: 
+        raw_label = d.get("label", "object")
+        cleaned = normalize_label(raw_label)
+        if cleaned is None:
             continue
 
         conf = float(d.get("confidence", 0.0))
-        required_conf = get_confidence_threshold(normalized_label)
+        required_conf = get_confidence_threshold(cleaned)
 
         if conf >= required_conf:
             filtered.append({
-                "label": normalized_label,
+                "label": cleaned,
                 "confidence": conf,
                 "center": d.get("center"),
             })
 
     if not filtered:
-        return [],[],[]
+        return "I don't see any objects clearly."
 
-    # Sort by confidence; priority first, and highest to lowest
-    filtered.sort(key=lambda x: 
-                  (x["confidence"] + 1 if x["label"] in PRIORITY_LABELS \
-                  else x["confidence"]), 
-                  reverse=True)
+    # Sort by confidence
+    filtered.sort(key=lambda x: x["confidence"], reverse=True)
 
-    filtered = filtered[:max_items] # limit to max items
+    # Priority first
+    priority = [d for d in filtered if d["label"] in PRIORITY_LABELS]
+    non_priority = [d for d in filtered if d["label"] not in PRIORITY_LABELS]
 
-    # build list of labels and directions for speech output
-    filtered = [
-        {
-            "label": d["label"],
-            "direction": direction_from_center(d["center"], frame_width)
-        }
-        for d in filtered
-    ]
+    combined = priority + non_priority
+    combined = combined[:max_items]
 
-    return filtered
-
-def _construct_description(filtered_detections: List[Dict[str, Optional[str]]]) -> str:
-    """Constructs a natural language description from the filtered detections."""
-    phrases = [] # constructed in loop below
-
-    for d in filtered_detections:
-        # adding article to each label
+    # Build phrases
+    phrases: list[str] = []
+    for d in combined:
         label = d["label"]
-        label_with_article = add_indefinite_article(label)
+        center = d["center"]
+        direction = direction_from_center(center, frame_width)
 
-        direction = d["direction"]
+        obj_phrase = add_indefinite_article(label)
 
-        # constructs phrase that begins with the label (with article) and ends with description of the direction.
-        phrase = label_with_article
-        match direction:
-            case Direction.LEFT:
-                phrase = f"{label_with_article} to your left"
-            case Direction.RIGHT:
-                phrase = f"{label_with_article} to your right"
-            case Direction.FRONT:
-                phrase = f"{label_with_article} in front of you"
+        if direction:
+            phrases.append(f"{obj_phrase} {direction}")
+        else:
+            phrases.append(obj_phrase)
 
-        phrases.append(phrase)
+    if not phrases:
+        return "I don't see any objects clearly."
 
     # Natural sentence
     if len(phrases) == 1:
