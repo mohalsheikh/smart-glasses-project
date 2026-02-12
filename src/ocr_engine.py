@@ -105,6 +105,9 @@ class OCREngine:
         Extracts all text from image and returns a single readable string.
         Filters by minimum confidence and sorts in reading order (top to bottom, left to right).
         """
+
+        # TODO preprocessing funcs here
+
         results = self._extract_text(image)
         filtered = self._filter_and_sort_results(results, min_conf)
         if not filtered:

@@ -129,7 +129,7 @@ def _format_detections(
     detections: List[Dict[str, Any]],
     frame_width: int,
     max_items: int = MAX_SPEECH_ITEMS,
-) -> List[Dict[str, Optional[str]]]:
+) -> List[Dict[str, Optional[str]]] | None:
     """
     Formats detections into a list of dicts with label and direction, which is to be used for summarization.
     """
@@ -154,8 +154,8 @@ def _format_detections(
                 "center": d.get("center"),
             })
 
-    if not filtered:
-        return [],[],[]
+    if len(filtered) == 0:
+        return None
 
     # Sort by confidence; priority first, and highest to lowest
     filtered.sort(key=lambda x: 
