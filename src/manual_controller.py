@@ -12,7 +12,7 @@ This module is responsible for:
 from src.camera_handler import CameraHandler
 from src.currency_recognizer import CurrencyRecognizer
 from src.object_detector import ObjectDetector
-from src.ocr_engine import OCREngine
+from src.ocr_engine2 import OCREngine2
 from src.speech_engine import SpeechEngine
 
 import src.utils.config as config
@@ -24,7 +24,7 @@ class MainController:
         self.camera = CameraHandler()
         self.detector = ObjectDetector()
         self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
-        self.ocr = OCREngine() # unfinished.
+        self.ocr = OCREngine2() # unfinished.
         self.speech = SpeechEngine()
 
         self.camera_frame_width = self.camera.frame_width # frame width from camera handler
