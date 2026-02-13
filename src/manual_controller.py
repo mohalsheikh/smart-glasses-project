@@ -49,48 +49,70 @@ class MainController:
                 frame = self.camera.capture_frame() 
                 # print("Got frame from camera.")
 
-
-                # =========================================================================================
-                # TEST: Per-object OCR attachment
-                # =========================================================================================
-                detections, annotated_frame = self.detector.detect(frame, annotate=True)
-
-                try:
-                    detections = self.ocr.attach_crop_text_to_detected_objects(frame, detections)
-
-                    print("\n=== Per-object OCR test ===")
-                    for i, det in enumerate(detections):
-                        print(
-                            f"[{i}] "
-                            f"label={det.get('label')} "
-                            f"confidence={det.get('confidence')} "
-                            f"bbox={det.get('bbox')} "
-                            f"ocr_text='{det.get('ocr_text', '')}'"
-                        )
-                    print("=== End per-object OCR test ===\n")
-
-                except Exception as e:
-                    print(f"[Per-object OCR test ERROR] {type(e).__name__}: {e}")
-                # =========================================================================================
-                # Results: Successful attachment of OCR text to detected objects. But might have bad confidence keys.   
-                # ==========================================================================================
-
-
-
-                # next, the object detector detects objects inside of the frame.
-                # from this we get the detection results and update the frame with annotations.
-                detections, annotated_frame = self.detector.detect(frame, annotate=True)
-                # print("Detection complete.")
+                # detections, annotated_frame = self.detector.detect(frame, annotate=True)
 
                 # Run OCR (Extract text) on the full frame and 
                 # format confidence-based feedback for the user based on annotated confidence values.
+                print()
+                print("✅ OCR Ready!")
                 print("🔍 Running OCR on frame...")
+                # The object detector detects objects inside of the frame.
+                # from this we get the detection results and update the frame with annotations.
+                detections, annotated_frame = self.detector.detect(frame, annotate=True)
+                print("✅ Detection complete.")
+
                 ocr_result = self.ocr.extract_text_with_confidence(frame)
                 ocr_feedback = format_ocr_feedback(ocr_result)
                 if ocr_result.get("text"):
                     print(ocr_feedback)
                 else:
                     print("❌🔍 No text detected.\n")
+                # =========================================================================================
+                # TEST: Per-object OCR attachment
+                # =========================================================================================
+                try:
+                    detections = self.ocr.attach_crop_text_to_detected_objects(frame, detections)
+
+                    print("ℹ️  Per-object OCR attachment results ℹ️")
+                    print("====================================================")
+
+                    for i, det in enumerate(detections):
+                        # Extract Values
+                        label = det.get("label")
+                        confidence = det.get("confidence")
+                        bbox = det.get("bbox")
+                        ocr_text = det.get("ocr_text")
+                        # Format confidence (round to 2 decimals)
+                        confidence_str = f"{float(confidence):.2f}" if confidence is not None else "n/a"
+                        # Simplify bounding box feedback (remove np.float32 text)
+                        if bbox is not None:
+                            try:
+                                x1, y1, x2, y2 = bbox
+                                bbox_str = f"({int(x1)}, {int(y1)}, {int(x2)}, {int(y2)})"
+                            except Exception:
+                                bbox_str = "n/a"
+                        else:
+                            bbox_str = "n/a"
+                        # Format OCR text (strip whitespace, show (none) if empty)
+                        ocr_text_str = (ocr_text or "").strip()
+                        # Format label (strip whitespace, show n/a if empty)
+                        label_str = str(label).strip() if label else "n/a"
+                        # Output Results with Formtting 
+                        print(f" ID [{i:02d}]")
+                        print(f"   Label:         {label_str}")
+                        print(f"   Conf:          {confidence_str}")
+                        print(f"   BBox:          {bbox_str}")
+                        if ocr_text_str:
+                            print(f"   Attached_Text: '{ocr_text_str}'")
+                        else:
+                            print(f"   Attached_Text: none")
+                    print("====================================================")
+
+                except Exception as e:
+                    print(f"[Per-object OCR attachment ERROR] {type(e).__name__}: {e}")
+                # =========================================================================================
+                # Results: Successful attachment of OCR text to detected objects. But might have bad confidence keys.   
+                # ==========================================================================================
 
                 # finally, we summarize the detections and speak them out loud.
                 description = summarize_detections(detections, frame_width=self.camera_frame_width)
