@@ -173,3 +173,86 @@ def format_ocr_feedback(
             conf_msg = f"⚠️🟡 Confidence: mid (avg {avg_conf:.2f})\n"
         
         return f'\n📝 Text: "{text}"\n{conf_msg}'
+
+def _bbox_area(bbox) -> float:
+    """
+    bbox is (x1, y1, x2, y2)
+    """
+    try:
+        x1, y1, x2, y2 = bbox
+        w = max(0.0, float(x2) - float(x1))
+        h = max(0.0, float(y2) - float(y1))
+        return w * h
+    except Exception:
+        return 0.0
+
+
+def _estimate_distance_word(bbox, frame_width: int, frame_height: int) -> str:
+    """
+    Rough distance estimate based on bounding-box area as a % of frame area.
+    (Not perfect, but good enough for Sprint 2)
+    """
+    if frame_width <= 0 or frame_height <= 0:
+        return "unknown distance"
+
+    area = _bbox_area(bbox)
+    frame_area = float(frame_width) * float(frame_height)
+    ratio = area / frame_area if frame_area > 0 else 0.0
+
+    if ratio > 0.20:
+        return "very close"
+    if ratio > 0.08:
+        return "near"
+    return "far"
+
+
+def filter_detections_by_label(detections, target_label: str):
+    """
+    Filter detections down to only the requested target label.
+    We match against normalized labels in normalize_label().
+    """
+    if not target_label:
+        return []
+
+    target = target_label.strip().lower()
+    matches = []
+
+    for d in detections:
+        raw_label = d.get("label", "")
+        cleaned = normalize_label(raw_label)
+        if cleaned is None:
+            continue
+
+        if str(cleaned).strip().lower() == target:
+            matches.append(d)
+
+    return matches
+
+
+def summarize_target_location(
+    detections,
+    frame_width: int,
+    frame_height: int,
+    target_label: str,
+) -> str:
+    """
+    Sprint 2 target-only output:
+    - B: direction + rough near/far
+    - C: mention count if multiple
+    """
+    if not target_label:
+        return "I didn't understand which object you're looking for. Try saying: where is my bottle."
+
+    matches = filter_detections_by_label(detections, target_label)
+    if not matches:
+        return f"I don't see a {target_label}. Want me to describe what I do see?"
+
+    # Choose the “best” match by largest area (usually closest / most important)
+    best = max(matches, key=lambda d: _bbox_area(d.get("bbox")))
+    direction = direction_from_center(best.get("center"), frame_width) or "in front of you"
+    dist_word = _estimate_distance_word(best.get("bbox"), frame_width, frame_height)
+
+    if len(matches) == 1:
+        return f"Your {target_label} is {direction}. It looks {dist_word}."
+    else:
+        return f"I see {len(matches)} {target_label}s. The closest one is {direction} and looks {dist_word}."

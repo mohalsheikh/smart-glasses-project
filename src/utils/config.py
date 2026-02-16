@@ -133,34 +133,55 @@ LOG_LEVEL: str = "INFO"
 SHOW_FPS: bool = True
 SHOW_DETECTION_COUNT: bool = True
 
-# ---------------------------------------------------------------------------
-# Voice Input Settings (Offline Speech-to-Text via Vosk)
-# ---------------------------------------------------------------------------
-
-# This is used by manual_controller.py so you can press "r" to take a frame,
-# then speak a command like: "hey what is in front of me".
-#
-# Requirements:
-#   pip install vosk sounddevice
-#   (and download a Vosk model like "vosk-model-en-us-0.22")
+# -----------------------------
+# Voice Debug + Wake/Command
+# -----------------------------
 
 VOICE_INPUT_ENABLED: bool = True
 
-# Absolute path to your Vosk model folder (must contain am/, conf/, graph/)
-# NOTE: change this to where YOU unzipped the model.
-VOSK_MODEL_PATH: str = r"C:\\Repos\\vosk-model-en-us-0.22\\vosk-model-en-us-0.22"
+# Wake phrase
+WAKE_PHRASE: str = "vision"
 
-# Mic device index. Set to None to use your system default microphone.
-VOICE_INPUT_DEVICE_INDEX: int | None = None
+# Vosk model path
+VOSK_MODEL_PATH: str = r"C:\Repos\vosk-model-en-us-0.22\vosk-model-en-us-0.22"
 
-# These are safe defaults for most mics.
-VOICE_INPUT_TARGET_RATE: int = 16000
-VOICE_INPUT_BLOCK_SIZE: int = 8000
-VOICE_INPUT_TIMEOUT_SECONDS: float = 8.0
+# Mic settings
+MIC_DEVICE_INDEX: int | None = None   # set to a number if needed
+VOICE_SAMPLE_RATE: int = 16000
+VOICE_BLOCK_SIZE: int = 8000
 
-# Phrases the system should treat as "describe what's in front of me".
-# Matching is case-insensitive and whitespace-normalized.
-VOICE_DESCRIBE_COMMANDS: tuple[str, ...] = (
-    "hey what is in front of me",
+VOICE_COMMAND_TIMEOUT_SEC: float = 6.0
+VOICE_IGNORE_AFTER_WAKE_SEC: float = 1.0
+
+# Print what Vosk is hearing
+VOICE_DEBUG_PRINT_PARTIAL: bool = True
+VOICE_DEBUG_PRINT_FINAL: bool = True
+
+# Small command phrase grammar (START SMALL, expand later)
+# These are PHRASES (important!) not single words.
+VOICE_COMMAND_PHRASES: list[str] = [
+    "what do you see",
     "what is in front of me",
-)
+    "read this",
+    "what does this say",
+    "where is my bottle",
+    "where is my water bottle",
+    "where is the bottle",
+    "where is the water bottle",
+    "are there any bottles",
+    "are there any bottle",
+    "how much money am i holding",
+    "help",
+    "[unk]",
+]
+
+# Synonyms for mapping user phrases -> canonical label we match against YOLO labels
+OBJECT_SYNONYMS: dict[str, str] = {
+    "bottle": "bottle",
+    "water bottle": "bottle",
+    "phone": "phone",
+    "cell phone": "phone",
+    "book": "book",
+    "label": "label",
+    "sign": "sign",
+}

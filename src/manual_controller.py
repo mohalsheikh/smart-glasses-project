@@ -3,6 +3,12 @@ Manual controller module created by Ethan.
 This activates our pipeline upon user input rather than periodically.
 Currently, this user input is a key press, however in the future it will be voice commands.
 
+UPDATED (Sprint 2):
+- Always listening for wake phrase: "hey vision"
+- After wake phrase, speech says: "I'm listening."
+- Then listens for a command, captures a frame, runs YOLO/OCR/Currency depending on command,
+  and speaks only what the user asked for.
+
 This module is responsible for:
 - Initializing hardware and core services
 - Running the main processing loop
@@ -14,131 +20,214 @@ from src.currency_recognizer import CurrencyRecognizer
 from src.object_detector import ObjectDetector
 from src.ocr_engine import OCREngine
 from src.speech_engine import SpeechEngine
+from src.voice_listener import VoiceCommandListener
 
 import src.utils.config as config
-from src.utils.object_description import summarize_detections, format_ocr_feedback
+from src.utils.object_description import (
+    summarize_detections,
+    format_ocr_feedback,
+    summarize_target_location,
+    filter_detections_by_label,
+)
 
-# voice input is optional (only used in manual mode for now)
-try:
-    from src.voice_input import VoiceInput
-except Exception:
-    VoiceInput = None  # type: ignore
+from src.utils.command_router import parse_command
+
 
 class MainController:
     def __init__(self) -> None:
         # Core components
         self.camera = CameraHandler()
         self.detector = ObjectDetector()
-        self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
-        self.ocr = OCREngine() # unfinished.
+        self.currency = CurrencyRecognizer()
+        self.ocr = OCREngine()  # unfinished but usable for reading text
         self.speech = SpeechEngine()
 
-        # Optional: offline speech-to-text for manual commands
-        self.voice = None
-        if getattr(config, "VOICE_INPUT_ENABLED", False) and VoiceInput is not None:
-            try:
-                self.voice = VoiceInput(
-                    model_path=config.VOSK_MODEL_PATH,
-                    device_index=config.VOICE_INPUT_DEVICE_INDEX,
-                    target_rate=config.VOICE_INPUT_TARGET_RATE,
-                    block_size=config.VOICE_INPUT_BLOCK_SIZE,
-                )
-                print("🎙️ Voice input ready (Vosk)")
-            except Exception as e:
-                # Keep the rest of the system working even if voice isn't set up.
-                print(f"⚠️ Voice input disabled: {e}")
-                self.voice = None
+        self.camera_frame_width = self.camera.frame_width
+        self.camera_frame_height = self.camera.frame_height
 
-        self.camera_frame_width = self.camera.frame_width # frame width from camera handler
+        # Voice listener (always-on)
+        self.voice = None
+        if config.VOICE_INPUT_ENABLED:
+            self.voice = VoiceCommandListener()
 
         print("⚡ MANUAL Smart Glasses System Initialized")
         print(f"📊 Model: {config.DEFAULT_MODEL_NAME}")
 
-    def run(self) -> None:    
-        # frame variable used to hold the current frame from the camera.
-        # initially showing the first frame of the camera to open the window.
-        frame = self.camera.capture_and_show_frame()
+    def _process_command(self, command_text: str) -> None:
+        """
+        Takes the recognized command string, captures a fresh frame,
+        then runs the correct pipeline and speaks the result.
+        """
+        # Capture a fresh frame AFTER we have a command (matches your desired flow)
+        frame = self.camera.capture_frame()
+        if frame is None:
+            self.speech.speak("Sorry, I couldn't capture a frame.")
+            return
+
+        cmd = parse_command(command_text)
+
+        # Always run YOLO only when needed (performance-friendly)
+        if cmd.intent in ["describe", "locate_object", "count_object", "read_object"]:
+            detections, annotated_frame = self.detector.detect(frame, annotate=True)
+        else:
+            detections, annotated_frame = [], frame
+
+        # -------------------------
+        # Command: DESCRIBE SCENE
+        # -------------------------
+        if cmd.intent == "describe":
+            description = summarize_detections(detections, frame_width=self.camera_frame_width)
+            self.speech.speak(description)
+            print(f"[VOICE] {cmd.intent}: {description}")
+            return
+
+        # -------------------------
+        # Command: LOCATE OBJECT (target-only speech)
+        # -------------------------
+        if cmd.intent == "locate_object":
+            target = cmd.target
+            # If target is missing, ask user to try again
+            if not target:
+                self.speech.speak("Which object are you looking for? Try: where is my bottle.")
+                return
+
+            response = summarize_target_location(
+                detections,
+                frame_width=self.camera_frame_width,
+                frame_height=self.camera_frame_height,
+                target_label=target,
+            )
+            self.speech.speak(response)
+            print(f"[VOICE] locate {target}: {response}")
+            return
+
+        # -------------------------
+        # Command: COUNT/FILTER OBJECT
+        # “are there any ____”
+        # -------------------------
+        if cmd.intent == "count_object":
+            target = cmd.target
+            if not target:
+                self.speech.speak("Which object should I check for? Try: are there any bottles.")
+                return
+
+            matches = filter_detections_by_label(detections, target)
+            if not matches:
+                response = f"I don't see any {target}s. Want me to describe what I do see?"
+            elif len(matches) == 1:
+                response = f"Yes, I see one {target}."
+            else:
+                response = f"Yes, I see {len(matches)} {target}s."
+            self.speech.speak(response)
+            print(f"[VOICE] count {target}: {response}")
+            return
+
+        # -------------------------
+        # Command: READ FULL FRAME TEXT
+        # -------------------------
+        if cmd.intent == "read_frame":
+            print("🔍 Running OCR on frame (read this)...")
+            ocr_result = self.ocr.extract_text_with_confidence(frame)
+            if ocr_result.get("text"):
+                # Speak the text (plus a short confidence hint)
+                spoken = f"It says: {ocr_result['text']}"
+                self.speech.speak(spoken)
+                print(format_ocr_feedback(ocr_result))
+            else:
+                self.speech.speak("I don't see any readable text.")
+            return
+
+        # -------------------------
+        # Command: READ TEXT ON A SPECIFIC OBJECT
+        # -------------------------
+        if cmd.intent == "read_object":
+            target = cmd.target
+            if not target:
+                self.speech.speak("What should I read? Try: read the label or read the book.")
+                return
+
+            matches = filter_detections_by_label(detections, target)
+            if not matches:
+                self.speech.speak(f"I don't see a {target}. Want me to describe what I do see?")
+                return
+
+            # Choose the best match (largest bbox usually closest)
+            best = max(matches, key=lambda d: (d.get("bbox")[2] - d.get("bbox")[0]) * (d.get("bbox")[3] - d.get("bbox")[1]))
+
+            x1, y1, x2, y2 = [int(float(v)) for v in best["bbox"]]
+            crop = frame[max(0, y1):max(0, y2), max(0, x1):max(0, x2)]
+
+            text = self.ocr.extract_text_as_string(crop)
+            if text:
+                self.speech.speak(f"The {target} says: {text}")
+            else:
+                self.speech.speak(f"I don't see readable text on the {target}.")
+            return
+
+        # -------------------------
+        # Command: CURRENCY
+        # -------------------------
+        if cmd.intent == "currency":
+            result = self.currency.recognize(frame)
+            self.speech.speak(result)
+            print(f"[VOICE] currency: {result}")
+            return
+
+        # -------------------------
+        # HELP / UNKNOWN
+        # -------------------------
+        if cmd.intent == "help" or cmd.intent == "unknown":
+            help_text = (
+                "Try saying: "
+                "what do you see, "
+                "where is my water bottle, "
+                "read this, "
+                "or how much money am I holding."
+            )
+            self.speech.speak(help_text)
+            print(f"[VOICE] help/unknown: {command_text}")
+            return
+
+    def run(self) -> None:
+        # show the first frame to open the window (if debug window is enabled)
+        frame = self.camera.capture_frame()
         annotated_frame = frame.copy() if frame is not None else None
 
-        # instructions for the user
-        if self.voice is None:
-            print('Press r to process a frame. Press Ctrl+C to exit.')
-        else:
-            print('Press r to take a frame, then say: "hey what is in front of me". Press Ctrl+C to exit.')
-        while True: # main loop
-            if self.camera.wait_key_press('r'):  # if r is pressed...
+        # start voice listener
+        if self.voice is not None:
+            self.voice.start_background()
 
+        print(f'Say "{config.WAKE_PHRASE}" to wake me up. Then say a command.')
+        print("Example commands:")
+        print('- "what do you see"')
+        print('- "where is my water bottle"')
+        print('- "read this"')
+        print('- "how much money am I holding"')
+        print("Press Ctrl+C to exit.\n")
 
-                # print("r pressed.")
-                # first, the camera handler obtains a frame from the camera...
-                frame = self.camera.capture_frame() 
-                # print("Got frame from camera.")
-
-                if frame is None:
-                    print("⚠️ No frame from camera.")
-                    continue
-
-                # If voice is enabled, start listening AFTER we take the frame.
-                # This matches the behavior you asked for (capture first, then ask the question).
-                if self.voice is not None:
-                    print('\n🎙️ Listening... (say: "hey what is in front of me")')
-                    transcript = self.voice.listen_once(timeout_seconds=config.VOICE_INPUT_TIMEOUT_SECONDS)
-                    transcript = transcript.strip()
-
-                    if not transcript:
-                        print("🎙️ No speech detected.")
-                        self.speech.speak("I didn't hear a command.")
-                        continue
-
-                    print(f"🎙️ Heard: {transcript}")
-                    if not self.voice.matches_any(transcript, config.VOICE_DESCRIBE_COMMANDS):
-                        print("🎙️ Command not recognized. Try again.")
-                        self.speech.speak("Sorry, I didn't catch that.")
-                        continue
-
-
-                # =========================================================================================
-                # TEST: Per-object OCR attachment
-                # =========================================================================================
-                detections, annotated_frame = self.detector.detect(frame, annotate=True)
-
+        while True:
+            # Keep the camera window responsive (optional)
+            if config.SHOW_DEBUG_WINDOW:
                 try:
-                    detections = self.ocr.attach_crop_text_to_detected_objects(frame, detections)
+                    live = self.camera.capture_frame()
+                    if live is not None:
+                        annotated_frame = live
+                    if annotated_frame is not None:
+                        self.camera.show_image(annotated_frame)
+                    # Pump window events
+                    self.camera.wait_key_press("~", delay=1)
+                except Exception:
+                    # If running headless (Pi without GUI), ignore window errors
+                    pass
 
-                    print("\n=== Per-object OCR test ===")
-                    for i, det in enumerate(detections):
-                        print(
-                            f"[{i}] "
-                            f"label={det.get('label')} "
-                            f"confidence={det.get('confidence')} "
-                            f"bbox={det.get('bbox')} "
-                            f"ocr_text='{det.get('ocr_text', '')}'"
-                        )
-                    print("=== End per-object OCR test ===\n")
+            # Voice loop (always-on)
+            if self.voice is not None:
+                # drive recognition
+                self.voice.tick()
 
-                except Exception as e:
-                    print(f"[Per-object OCR test ERROR] {type(e).__name__}: {e}")
-                # =========================================================================================
-                # Results: Successful attachment of OCR text to detected objects. But might have bad confidence keys.   
-                # ==========================================================================================
-
-                # Run OCR (Extract text) on the full frame and 
-                # format confidence-based feedback for the user based on annotated confidence values.
-                print("🔍 Running OCR on frame...")
-                ocr_result = self.ocr.extract_text_with_confidence(frame)
-                ocr_feedback = format_ocr_feedback(ocr_result)
-                if ocr_result.get("text"):
-                    print(ocr_feedback)
-                else:
-                    print("❌🔍 No text detected.\n")
-
-                # finally, we summarize the detections and speak them out loud.
-                description = summarize_detections(detections, frame_width=self.camera_frame_width)
-                # print("Generated description.")
-
-                self.speech.speak(description)
-
-                print(f"Frame processed: {description}")
-            
-            if annotated_frame is not None:
-                self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.
+                event = self.voice.poll_event()
+                if event:
+                    if event["type"] == "wake":
+                        self.speech.speak("I'm listening.")
+                    elif event["type"] == "command":
+                        self._process_command(event["text"])
