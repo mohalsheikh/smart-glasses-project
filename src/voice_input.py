@@ -29,12 +29,13 @@ COMMAND_GRAMMAR: str = '["detect", "[unk]"]'
 class VoiceInput:
     def __init__(
         self,
-        model_path: str = VOSK_MODEL_PATH,
+        model_path = VOSK_MODEL_PATH,
         device_index: int | None = None,
         target_rate: int = 16000,
         block_size: int = 8000,
     ) -> None:
         
+        self.model_path = model_path
         self.device_index = device_index if device_index is not None else sd.default.device[0]
         self.target_rate = target_rate
         self.block_size = block_size
@@ -56,8 +57,6 @@ class VoiceInput:
         self.sample_rate = self._pick_sample_rate()
         
         self.model = Model(self.model_path)
-        self.recognizer = KaldiRecognizer(self.model, self.sample_rate)
-
         self._q: "queue.Queue[bytes]" = queue.Queue()
 
     def print_input_devices(self) -> None:
@@ -107,14 +106,14 @@ class VoiceInput:
                 return True
         return False
     
-    def listen_wake_word(self, timeout_seconds: float = 8.0) -> bool:
+    def listen_wake_word(self, timeout_seconds: float = 8.0) -> str:
         """Set grammar to WAKE_WORD_GRAMMAR and then listen for the wake word."""
-        self.recognizer.SetGrammar(WAKE_WORD_GRAMMAR) # swap to wake word grammar
+        self.recognizer = KaldiRecognizer(self.model, self.sample_rate, WAKE_WORD_GRAMMAR)
         return self.listen(timeout_seconds)
 
     def listen_command(self, timeout_seconds: float = 8.0) -> str:
         """Set grammar to COMMAND_GRAMMAR and then listen for a command."""
-        self.recognizer.SetGrammar(COMMAND_GRAMMAR) # swap to command grammar
+        self.recognizer = KaldiRecognizer(self.model, self.sample_rate, COMMAND_GRAMMAR)
         return self.listen(timeout_seconds)
 
     def listen(self, timeout_seconds: float = 8.0) -> str:
@@ -129,10 +128,6 @@ class VoiceInput:
 
         last_partial: Optional[str] = None
         end_time = time.time() + float(timeout_seconds)
-
-        # helper to clean up Vosk's unknown token from results.
-        # We replace it with empty string and then strip whitespace. "[unk]" becomes "", something like "detect [unk]" becomes "detect". 
-        remove_unk = lambda s: s.replace("[unk]", "").strip() 
 
         # start listening until timeout
         try:
@@ -155,8 +150,6 @@ class VoiceInput:
                         result = json.loads(self.recognizer.Result())
                         text = str(result.get("text", "")).strip()
                         if text:
-                            # ignore [unk] results by replacing them with empty string, then stripping whitespace.
-                            text = remove_unk(text)
                             return text
                     else:
                         partial = json.loads(self.recognizer.PartialResult()).get("partial", "")
@@ -168,4 +161,4 @@ class VoiceInput:
             print(f"[VoiceInput ERROR] {type(e).__name__}: {e}")
             return ""
 
-        return remove_unk(last_partial) or "" # if we got a partial result but no final, return the partial. Otherwise return empty string.
+        return last_partial or "" # if we got a partial result but no final, return the partial. Otherwise return empty string.

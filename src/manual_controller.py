@@ -32,26 +32,16 @@ class MainController:
         # self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
         self.ocr = OCREngine() # unfinished.
         self.speech = SpeechEngine()
-
-        # Optional: offline speech-to-text for manual commands
-        self.voice = None
-        if getattr(config, "VOICE_INPUT_ENABLED", False) and VoiceInput is not None:
-            try:
-                self.voice = VoiceInput(
-                    model_path=config.VOSK_MODEL_PATH,
-                    device_index=config.VOICE_INPUT_DEVICE_INDEX,
-                    target_rate=config.VOICE_INPUT_TARGET_RATE,
-                    block_size=config.VOICE_INPUT_BLOCK_SIZE,
-                )
-                print("🎙️ Voice input ready (Vosk)")
-            except Exception as e:
-                # Keep the rest of the system working even if voice isn't set up.
-                print(f"⚠️ Voice input disabled: {e}")
-                self.voice = None
+        self.voice = VoiceInput()
 
         self.camera_frame_width = self.camera.frame_width # frame width from camera handler
 
         print("⚡ MANUAL Smart Glasses System Initialized")
+
+    # helper to clean up Vosk's unknown token from results.
+    # We replace it with empty string and then strip whitespace. "[unk]" becomes "", something like "detect [unk]" becomes "detect". 
+    def _remove_unk(self, s: str) -> str:
+        return s.replace("[unk]", "").strip()
 
     def run(self) -> None:    
         # frame variable used to hold the current frame from the camera.
@@ -60,10 +50,8 @@ class MainController:
         annotated_frame = frame.copy() if frame is not None else None
 
         # instructions for the user
-        if self.voice is None:
-            print('Press r to process a frame. Press Ctrl+C to exit.')
-        else:
-            print('Press r to take a frame. Press Ctrl+C to exit.')
+        print('Press r to process a frame. Press Ctrl+C to exit.')
+
         while True: # main loop
             if self.camera.wait_key_press('r'):  # if r is pressed...
                 self.speech.speak("I'm listening!")
@@ -81,16 +69,25 @@ class MainController:
                 # This matches the behavior you asked for (capture first, then ask the question).
                 if self.voice is not None:
                     print('\n🎙️ Listening...')
-                    transcript = self.voice.listen()
-                    transcript = transcript.strip()
+
+                    try:
+                        transcript = self.voice.listen_command()
+                    except Exception as e:
+                        print(f"[VoiceInput ERROR] {type(e).__name__}: {e}")
+                        transcript = ""
+                        raise e
 
                     if not transcript:
                         print("🎙️ No speech detected.")
                         self.speech.speak("I didn't hear a command.")
                         continue
-
+                    
                     print(f"🎙️ Heard: {transcript}")
-                    if not self.voice.matches_any(transcript, config.VOICE_DESCRIBE_COMMANDS):
+
+                    cleaned_transcript = self._remove_unk(transcript)
+                    print(f"🎙️ Cleaned transcript: {cleaned_transcript}")
+                    
+                    if not cleaned_transcript:
                         print("🎙️ Command not recognized. Try again.")
                         self.speech.speak("Sorry, I didn't catch that.")
                         continue
