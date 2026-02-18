@@ -49,17 +49,15 @@ class MainController:
         frame = self.camera.capture_and_show_frame()
         annotated_frame = frame.copy() if frame is not None else None
 
-        # instructions for the user
-        print('Press r to process a frame. Press Ctrl+C to exit.')
-
         while True: # main loop
-            if self.camera.wait_key_press('r'):  # if r is pressed...
+            wake_word_input = self.voice.listen_wake_word(timeout_seconds=3)
+            print(f"Wake word input: '{wake_word_input}'")  # Debug print for wake word input
+
+            if 'vision' in wake_word_input:  # if the user said the wake word, we start the processing pipeline.
                 self.speech.speak("I'm listening!")
 
-                # print("r pressed.")
                 # first, the camera handler obtains a frame from the camera...
                 frame = self.camera.capture_frame() 
-                # print("Got frame from camera.")
 
                 if frame is None:
                     print("⚠️ No frame from camera.")
