@@ -63,7 +63,7 @@ class MainController:
         if self.voice is None:
             print('Press r to process a frame. Press Ctrl+C to exit.')
         else:
-            print('Press r to take a frame, then say: "hey what is in front of me". Press Ctrl+C to exit.')
+            print('Press r to take a frame. Press Ctrl+C to exit.')
         while True: # main loop
             if self.camera.wait_key_press('r'):  # if r is pressed...
                 self.speech.speak("I'm listening!")
@@ -80,8 +80,8 @@ class MainController:
                 # If voice is enabled, start listening AFTER we take the frame.
                 # This matches the behavior you asked for (capture first, then ask the question).
                 if self.voice is not None:
-                    print('\n🎙️ Listening... (say: "hey what is in front of me")')
-                    transcript = self.voice.listen_once(timeout_seconds=config.VOICE_INPUT_TIMEOUT_SECONDS)
+                    print('\n🎙️ Listening...')
+                    transcript = self.voice.listen()
                     transcript = transcript.strip()
 
                     if not transcript:

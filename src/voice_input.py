@@ -12,34 +12,32 @@ import queue
 import time
 from pathlib import Path
 from typing import Optional
+import sounddevice as sd
+from vosk import KaldiRecognizer, Model
 
+VOICE_INPUT_ENABLED: bool = True
+
+# Absolute path to your Vosk model folder (must contain am/, conf/, graph/)
+# NOTE: change this to where YOU unzipped the model.
+VOSK_MODEL_PATH: str = r"C:\\Repos\\vosk-model-small-en-us-0.15\\vosk-model-small-en-us-0.15"
+
+VOICE_INPUT_TIMEOUT_SECONDS: float = 8.0
+
+WAKE_WORD_GRAMMAR: str = '["hey vision", "[unk]"]'
+COMMAND_GRAMMAR: str = '["detect", "[unk]"]'
 
 class VoiceInput:
     def __init__(
         self,
-        model_path: str,
+        model_path: str = VOSK_MODEL_PATH,
         device_index: int | None = None,
         target_rate: int = 16000,
         block_size: int = 8000,
     ) -> None:
-        # We keep imports inside so the project can still run even if
-        # someone hasn't installed the voice dependencies yet.
-        try:
-            import sounddevice as sd  # type: ignore
-            from vosk import KaldiRecognizer, Model  # type: ignore
-        except Exception as e:  # noqa: BLE001
-            raise RuntimeError(
-                "VoiceInput needs 'vosk' and 'sounddevice'. "
-                "Install them with: pip install vosk sounddevice"
-            ) from e
-
-        self._sd = sd
-        self._Model = Model
-        self._KaldiRecognizer = KaldiRecognizer
-
-        self.device_index = device_index
-        self.target_rate = int(target_rate)
-        self.block_size = int(block_size)
+        
+        self.device_index = device_index if device_index is not None else sd.default.device[0]
+        self.target_rate = target_rate
+        self.block_size = block_size
 
         # ---- Verify model folder ----
         p = Path(model_path)
@@ -53,13 +51,12 @@ class VoiceInput:
                 f"Invalid Vosk model folder: {p}\n"
                 "It must contain: am/, conf/, graph/."
             )
-
-        self.model_path = str(p)
-        # Model load is the expensive part, so we do it once.
-        self.model = self._Model(self.model_path)
-
+        
         # This gets decided per-device (some mics won't open at 16kHz).
         self.sample_rate = self._pick_sample_rate()
+        
+        self.model = Model(self.model_path)
+        self.recognizer = KaldiRecognizer(self.model, self.sample_rate)
 
         self._q: "queue.Queue[bytes]" = queue.Queue()
 
@@ -85,23 +82,18 @@ class VoiceInput:
                 )
 
     def _pick_sample_rate(self) -> int:
-        sd = self._sd
-
         # If device_index isn't set, use the system default input device.
-        device = self.device_index
-        if device is None:
-            device = sd.default.device[0]
 
-        info = sd.query_devices(device)
+        info = sd.query_devices(self.device_index)
         device_default = int(info.get("default_samplerate", self.target_rate))
 
         # Try 16kHz first (ideal for most Vosk models), then fallback.
         sr = self.target_rate
         try:
-            sd.check_input_settings(device=device, samplerate=sr, channels=1, dtype="int16")
+            sd.check_input_settings(device=self.device_index, samplerate=sr, channels=1, dtype="int16")
             return sr
         except Exception:  # noqa: BLE001
-            sd.check_input_settings(device=device, samplerate=device_default, channels=1, dtype="int16")
+            sd.check_input_settings(device=self.device_index, samplerate=device_default, channels=1, dtype="int16")
             return device_default
 
     @staticmethod
@@ -114,16 +106,19 @@ class VoiceInput:
             if self._normalize(p) in heard:
                 return True
         return False
+    
+    def listen_wake_word(self, timeout_seconds: float = 8.0) -> bool:
+        """Set grammar to WAKE_WORD_GRAMMAR and then listen for the wake word."""
+        self.recognizer.SetGrammar(WAKE_WORD_GRAMMAR) # swap to wake word grammar
+        return self.listen(timeout_seconds)
 
-    def listen_once(self, timeout_seconds: float = 8.0) -> str:
-        """Listen for one short command and return the transcript (lowercase-ish)."""
+    def listen_command(self, timeout_seconds: float = 8.0) -> str:
+        """Set grammar to COMMAND_GRAMMAR and then listen for a command."""
+        self.recognizer.SetGrammar(COMMAND_GRAMMAR) # swap to command grammar
+        return self.listen(timeout_seconds)
 
-        sd = self._sd
-        KaldiRecognizer = self._KaldiRecognizer
-
-        device = self.device_index
-        if device is None:
-            device = sd.default.device[0]
+    def listen(self, timeout_seconds: float = 8.0) -> str:
+        """Listen for user voice input and return the transcript, based on the set grammar."""
 
         # Callback pushes raw audio bytes into the queue.
         def _callback(indata, frames, time_info, status):  # noqa: ANN001
@@ -132,33 +127,39 @@ class VoiceInput:
                 print("Audio status:", status)
             self._q.put(bytes(indata))
 
-        rec = KaldiRecognizer(self.model, self.sample_rate)
-
         last_partial: Optional[str] = None
         end_time = time.time() + float(timeout_seconds)
 
+        # helper to clean up Vosk's unknown token from results.
+        # We replace it with empty string and then strip whitespace. "[unk]" becomes "", something like "detect [unk]" becomes "detect". 
+        remove_unk = lambda s: s.replace("[unk]", "").strip() 
+
+        # start listening until timeout
         try:
             with sd.RawInputStream(
-                device=device,
+                device=self.device_index,
                 samplerate=self.sample_rate,
                 blocksize=self.block_size,
                 dtype="int16",
                 channels=1,
                 callback=_callback,
             ):
-                while time.time() < end_time:
+                while time.time() < end_time: # while we haven't hit the timeout...
+                    # Check the queue for new audio data. If we get some, feed it to Vosk, otherwise just loop and check again
                     try:
                         data = self._q.get(timeout=0.2)
                     except queue.Empty:
                         continue
 
-                    if rec.AcceptWaveform(data):
-                        result = json.loads(rec.Result())
+                    if self.recognizer.AcceptWaveform(data): # if the user has finished speaking...
+                        result = json.loads(self.recognizer.Result())
                         text = str(result.get("text", "")).strip()
                         if text:
+                            # ignore [unk] results by replacing them with empty string, then stripping whitespace.
+                            text = remove_unk(text)
                             return text
                     else:
-                        partial = json.loads(rec.PartialResult()).get("partial", "")
+                        partial = json.loads(self.recognizer.PartialResult()).get("partial", "")
                         partial = str(partial).strip()
                         if partial:
                             last_partial = partial
@@ -167,4 +168,4 @@ class VoiceInput:
             print(f"[VoiceInput ERROR] {type(e).__name__}: {e}")
             return ""
 
-        return last_partial or ""
+        return remove_unk(last_partial) or "" # if we got a partial result but no final, return the partial. Otherwise return empty string.
