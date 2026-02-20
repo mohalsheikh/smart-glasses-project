@@ -3,7 +3,7 @@ Advanced AI Features Module
 Contains cutting-edge AI capabilities for smart glasses
 """
 
-from .scene_memory import SceneMemoryEngine, MemoryEntry
+from .enhanced_scene_memory import SceneMemoryEngine, MemoryEntry
 from .emotion_analyzer import EmotionFaceAnalyzer, FaceData
 from .advanced_yolo import AdvancedObjectDetector, EnhancedDetection
 from .color_text_analyzer import ColorTextAnalyzer

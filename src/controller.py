@@ -25,9 +25,9 @@ from src.currency_recognizer import CurrencyRecognizer
 from src.ocr_engine import OCREngine
 from src.speech_engine import SpeechEngine
 from src.scene_ai_client import SceneAIClient
-from src.voice_listener import VoiceListener
-from src.ai_features.scene_memory import SceneMemoryEngine
+from src.ai_features.enhanced_scene_memory import EnhancedSceneMemory as SceneMemoryEngine
 from src.ai_features.human_analyzer import HumanAnalyzer, create_human_analyzer
+from src.voice.advanced_voice_listener import VoiceListener
 
 # Sign Language Interpreter import
 from src.ai_features.sign_language_interpreter import (
