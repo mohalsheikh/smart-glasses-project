@@ -18,6 +18,7 @@ import easyocr
 import cv2 as cv # plan to use later for preprocessing..?
 import numpy as np
 
+DEFAULT_MIN_CONFIDENCE: float = 0.45
 
 class OCREngine:
 ############################################################################################
@@ -99,18 +100,21 @@ class OCREngine:
             })
         return results
 ############################################################################################
-    def extract_text_as_string(self, image: np.ndarray, min_conf: float = 0.45) -> str:
+    def extract_text_as_string(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> str:
         """
         Extracts all text from image and returns a single readable string.
         Filters by minimum confidence and sorts in reading order (top to bottom, left to right).
         """
+
+        # TODO preprocessing funcs here
+
         results = self._extract_text(image)
         filtered = self._filter_and_sort_results(results, min_conf)
         if not filtered:
             return ""
         return self._join_text(filtered)
 ############################################################################################
-    def extract_text_with_confidence(self, image: np.ndarray, min_conf: float = 0.45) -> Dict[str, Any]:
+    def extract_text_with_confidence(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> Dict[str, Any]:
         """
         Extracts all text from image and returns a dict with text and confidence metrics.
         
@@ -140,7 +144,7 @@ class OCREngine:
             "count": conf_metrics["count"]
         }
 ############################################################################################
-    def attach_crop_text_to_detected_objects(self, frame: np.ndarray, detections: List[Dict[str, Any]], min_conf: float = 0.45) -> List[Dict[str, Any]]:
+    def attach_crop_text_to_detected_objects(self, frame: np.ndarray, detections: List[Dict[str, Any]], min_conf: float = DEFAULT_MIN_CONFIDENCE) -> List[Dict[str, Any]]:
         """
         For each detected object's bounding-box crop, attaches the extracted
         text to the detection dictionary using the "ocr_text" field.

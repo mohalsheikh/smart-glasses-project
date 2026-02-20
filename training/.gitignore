@@ -1,0 +1,23 @@
+# Training artifacts
+datasets/
+runs/
+*.onnx
+*.torchscript
+
+# Keep the final model
+!models/currency_detector.pt
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
