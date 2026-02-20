@@ -24,7 +24,7 @@ VOSK_MODEL_PATH: str = r"C:\\Repos\\vosk-model-small-en-us-0.15\\vosk-model-smal
 VOICE_INPUT_TIMEOUT_SECONDS: float = 8.0
 
 WAKE_WORD_GRAMMAR: str = '["vision", "[unk]"]'
-COMMAND_GRAMMAR: str = '["detect", "[unk]"]'
+COMMAND_GRAMMAR: str = '["detect", "read", "[unk]"]'
 
 class VoiceInput:
     def __init__(

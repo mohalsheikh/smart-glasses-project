@@ -7,7 +7,7 @@ from ultralytics import YOLO
 from src.utils.config import DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT
 import numpy as np
 
-DEFAULT_MODEL_NAME: str = "yolov8n-oiv7.pt"
+DEFAULT_MODEL_NAME: str = "yolov8n.pt"
 DEFAULT_YOLO_CONFIDENCE_THRESHOLD: float = 0.20 
 DEFAULT_IOU_THRESHOLD: float = 0.45
 DEFAULT_TRACKER: str = "bytetrack.yaml"

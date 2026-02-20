@@ -8,40 +8,40 @@ MAX_SPEECH_ITEMS: int = 5
 
 # Small objects that need lower confidence
 SMALL_OBJECTS: set = {
-    "Pen", "Pencil", "Toothbrush", "Spoon", "Fork", "Knife", 
-    "Remote control", "Computer mouse", "Glasses", "Watch"
+    # "Pen", "Pencil", "Toothbrush", "Spoon", "Fork", "Knife", 
+    # "Remote control", "Computer mouse", "Glasses", "Watch"
 }
 
 CONFIDENCE_BY_CATEGORY: dict = {
-    "small_objects": 0.15,
-    "priority_objects": 0.20,
-    "general_objects": 0.25,
+    # "small_objects": 0.15,
+    # "priority_objects": 0.20,
+    # "general_objects": 0.20, # 0.25,
 }
 
 # Ignore noisy labels
 IGNORE_LABELS = {
-    "Clothing", "Human arm", "Human hair", "Human leg", "Human body",
-    "Human head", "Human ear", "Human eye", "Human mouth", "Human nose",
-    "Human hand", "Human foot", "Human face", "Fashion accessory"
+    # "Clothing", "Human arm", "Human hair", "Human leg", "Human body",
+    # "Human head", "Human ear", "Human eye", "Human mouth", "Human nose",
+    # "Human hand", "Human foot", "Human face", "Fashion accessory"
 }
 
 # Merge similar labels
 MERGE_LABELS = {
-    "Human face": "person", "Man": "person", "Woman": "person",
-    "Boy": "person", "Girl": "person", "Person": "person",
-    "Laptop computer": "laptop", "Computer keyboard": "keyboard",
-    "Computer mouse": "mouse", "Mobile phone": "phone",
-    "Cellular telephone": "phone", "Telephone": "phone",
-    "Television": "TV", "Drink": "beverage",
+    # "Human face": "person", "Man": "person", "Woman": "person",
+    # "Boy": "person", "Girl": "person", "Person": "person",
+    # "Laptop computer": "laptop", "Computer keyboard": "keyboard",
+    # "Computer mouse": "mouse", "Mobile phone": "phone",
+    # "Cellular telephone": "phone", "Telephone": "phone",
+    # "Television": "TV", "Drink": "beverage",
 }
 
 # Priority objects
 PRIORITY_LABELS = {
-    "person", "Door", "Door handle", "Stairs", "Chair", "Table",
-    "Car", "Bus", "Truck", "Bicycle", "Motorcycle",
-    "Traffic light", "Traffic sign", "Stop sign",
-    "Laptop", "laptop", "phone", "Mug", "Bottle",
-    "Toilet", "Sink", "Bed", "Couch"
+    # "person", "Door", "Door handle", "Stairs", "Chair", "Table",
+    # "Car", "Bus", "Truck", "Bicycle", "Motorcycle",
+    # "Traffic light", "Traffic sign", "Stop sign",
+    # "Laptop", "laptop", "phone", "Mug", "Bottle",
+    # "Toilet", "Sink", "Bed", "Couch"
 }
 
 class Direction(Enum):
@@ -145,14 +145,15 @@ def _format_detections(
             continue
 
         conf = float(d.get("confidence", 0.0))
-        required_conf = get_confidence_threshold(normalized_label)
+        # required_conf = get_confidence_threshold(normalized_label)
 
-        if conf >= required_conf:
-            filtered.append({
-                "label": normalized_label,
-                "confidence": conf,
-                "center": d.get("center"),
-            })
+    # if conf >= required_conf:
+        filtered.append({
+            "label": normalized_label,
+            "confidence": conf,
+            "center": d.get("center"),
+            "ocr_text": d.get("ocr_text", None) # may be None if no text attached
+        })
 
     if len(filtered) == 0:
         return None
@@ -169,7 +170,8 @@ def _format_detections(
     filtered = [
         {
             "label": d["label"],
-            "direction": direction_from_center(d["center"], frame_width)
+            "direction": direction_from_center(d["center"], frame_width),
+            "ocr_text": d.get("ocr_text", None) # may be None if no text attached
         }
         for d in filtered
     ]
@@ -196,6 +198,10 @@ def _construct_description(filtered_detections: List[Dict[str, Optional[str]]]) 
                 phrase = f"{label_with_article} to your right"
             case Direction.FRONT:
                 phrase = f"{label_with_article} in front of you"
+
+        # if there is text attached to the detection, add that to the phrase as well
+        if d.get("ocr_text", None) is not None:
+            phrase += f' that says "{d["ocr_text"]}"'
 
         phrases.append(phrase)
         
