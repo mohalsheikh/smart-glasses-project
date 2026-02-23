@@ -14,25 +14,20 @@ from src.currency_recognizer import CurrencyRecognizer
 from src.object_detector import ObjectDetector
 from src.ocr_engine import OCREngine
 from src.speech_engine import SpeechEngine
+from src.voice_input import VoiceInput
 
 import src.utils.config as config
 from src.utils.object_description import summarize_detections, format_ocr_feedback
-
-# voice input is optional (only used in manual mode for now)
-try:
-    from src.voice_input import VoiceInput
-except Exception:
-    VoiceInput = None  # type: ignore
 
 class MainController:
     def __init__(self) -> None:
         # Core components
         self.camera = CameraHandler()
-        self.detector = ObjectDetector()
+        self.detector = ObjectDetector(model_name="yolov8s-oiv7.pt")
         # self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
         self.ocr = OCREngine() # unfinished.
         self.speech = SpeechEngine()
-        self.voice = VoiceInput()
+        self.voice = VoiceInput(model_class_names=self.detector.class_names) # pass the class names from the object detector to the voice input module so it can recognize them in commands.
 
         self.camera_frame_width = self.camera.frame_width # frame width from camera handler
 

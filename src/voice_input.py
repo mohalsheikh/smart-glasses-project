@@ -23,9 +23,6 @@ VOSK_MODEL_PATH: str = r"C:\\Repos\\vosk-model-small-en-us-0.15\\vosk-model-smal
 
 VOICE_INPUT_TIMEOUT_SECONDS: float = 8.0
 
-WAKE_WORD_GRAMMAR: str = '["vision", "[unk]"]'
-COMMAND_GRAMMAR: str = '["detect", "read", "[unk]"]'
-
 class VoiceInput:
     def __init__(
         self,
@@ -33,12 +30,29 @@ class VoiceInput:
         device_index: int | None = None,
         target_rate: int = 16000,
         block_size: int = 8000,
+        wake_word_grammar: str = '["vision", "[unk]"]',
+        command_grammar: str = '["detect", "read", "[unk]"]',
+        model_class_names: dict[int, str] | None = None 
     ) -> None:
         
         self.model_path = model_path
         self.device_index = device_index if device_index is not None else sd.default.device[0]
         self.target_rate = target_rate
         self.block_size = block_size
+        self.wake_word_grammar = wake_word_grammar
+        
+        if model_class_names is not None: # if model class names are provided, we want to add them to the command grammar so that Vosk can recognize them in commands.
+            cmd_grammar_json = json.loads(command_grammar)
+
+            # Insert class names into command grammar for recognition
+            for _, class_name in model_class_names.items():
+                cmd_grammar_json.insert(-1, class_name)  # Insert before ["unk"]
+
+            self.command_grammar = json.dumps(cmd_grammar_json)
+            print(f"Constructed command grammar with model class names: {self.command_grammar}")
+        else:
+            self.command_grammar = command_grammar
+
 
         # ---- Verify model folder ----
         p = Path(model_path)
@@ -108,12 +122,12 @@ class VoiceInput:
     
     def listen_wake_word(self, timeout_seconds: float = 8.0) -> str:
         """Set grammar to WAKE_WORD_GRAMMAR and then listen for the wake word."""
-        self.recognizer = KaldiRecognizer(self.model, self.sample_rate, WAKE_WORD_GRAMMAR)
+        self.recognizer = KaldiRecognizer(self.model, self.sample_rate, self.wake_word_grammar)
         return self.listen(timeout_seconds)
 
     def listen_command(self, timeout_seconds: float = 8.0) -> str:
         """Set grammar to COMMAND_GRAMMAR and then listen for a command."""
-        self.recognizer = KaldiRecognizer(self.model, self.sample_rate, COMMAND_GRAMMAR)
+        self.recognizer = KaldiRecognizer(self.model, self.sample_rate, self.command_grammar)
         return self.listen(timeout_seconds)
 
     def listen(self, timeout_seconds: float = 8.0) -> str:

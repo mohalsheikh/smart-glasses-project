@@ -27,6 +27,8 @@ IGNORE_LABELS = {
 
 # Merge similar labels
 MERGE_LABELS = {
+    "five-dollar-back": "5 dollar bill",
+    "ten-dollar-front": "10 dollar bill",
     # "Human face": "person", "Man": "person", "Woman": "person",
     # "Boy": "person", "Girl": "person", "Person": "person",
     # "Laptop computer": "laptop", "Computer keyboard": "keyboard",
