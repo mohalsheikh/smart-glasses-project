@@ -4,7 +4,9 @@
 from enum import Enum
 from typing import List, Dict, Any, Optional
 import src.utils.config as config
+import inflect
 
+_inflect = inflect.engine()
 MAX_SPEECH_ITEMS: int = 5
 
 # Small objects that need lower confidence
@@ -89,8 +91,7 @@ def add_indefinite_article(label: str) -> str:
     """Add a/an to label."""
     if not label:
         return label
-    first_letter = label[0].lower()
-    return f"an {label}" if first_letter in "aeiou" else f"a {label}"
+    return _inflect.a(label)
 
 
 def get_confidence_threshold(label: str) -> float:
@@ -102,19 +103,21 @@ def get_confidence_threshold(label: str) -> float:
     else:
         return CONFIDENCE_BY_CATEGORY["general_objects"]
 
-def pluralize(label: str) -> str:
-    """Convert singular label to plural form."""
-    if label == "person":
-        return "people"
-    return f"{label}s"
+def pluralize(label: str, count: int) -> str:
+    """Pluralize label correctly based on count."""
+    if count == 1:
+        return label
 
-def _count_to_word(count: int) -> str:
-    """Convert small integer counts to English words."""
-    words = {
-        2: "two", 3: "three", 4: "four", 5: "five",
-        6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"
-    }
-    return words.get(count, str(count))
+    plural = _inflect.plural_noun(label)
+    return plural if plural else label
+
+# def _count_to_word(count: int) -> str:
+#     """Convert small integer counts to English words."""
+#     words = {
+#         2: "two", 3: "three", 4: "four", 5: "five",
+#         6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"
+#     }
+#     return words.get(count, str(count))
 
 def summarize_detections(
     detections: List[Dict[str, Any]],
@@ -212,8 +215,9 @@ def _construct_description(filtered_detections: List[Dict[str, Optional[str]]]) 
             label_phrase = add_indefinite_article(label)
         else:
             # Convert to plural: "two people", "three bottles", etc.
-            plural_label = pluralize(label)
-            label_phrase = f"{_count_to_word(count)} {plural_label}"
+            plural_label = pluralize(label, count)
+            count_word = _inflect.number_to_words(count)
+            label_phrase = f"{count_word} {plural_label}"
         
         # Add direction
         match direction:
