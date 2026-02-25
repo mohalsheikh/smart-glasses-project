@@ -45,7 +45,7 @@ class VoiceInput:
         if not (p.exists() and p.is_dir()):
             raise RuntimeError(
                 f"Vosk model path does not exist: {p}\n"
-                "Set config.VOSK_MODEL_PATH to the folder that contains am/, conf/, graph/."
+                "Set VOSK_MODEL_PATH to the folder that contains am/, conf/, graph/."
             )
         if not ((p / "am").exists() and (p / "conf").exists() and (p / "graph").exists()):
             raise RuntimeError(
