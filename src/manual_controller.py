@@ -116,18 +116,18 @@ class MainController:
 
                         detections = [det for det in detections if det.get("ocr_text")] # filter to just objects with text
 
-                        description = summarize_detections(detections, frame_width=self.camera_frame_width) # TODO change to new func
+                        description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections of objects with text in natural language
                     case _:
                         # if this happens then the last word is probably a valid class name that YOLO can detect.
                         # now we want to see what the user wants to do with this...
-                        if last_word in self.class_names:
+                        if last_word in self.class_names: # TODO this check isn't going to work for classes that have multiple words... maybe preemptively generate a list of words that are part of multiple-word class names and check for those in the cleaned transcript? 
 
                             # we check for other terms in the cleaned transcript for two purposes: 
                             # 1) to look for command words like 'detect' or 'read'
                             # 2) to look for other class names that might indicate the user wants to deal with multiple classes at once
                             objs_to_process = [last_word]
                             
-                            for word in cleaned_transcript[:-1].split():
+                            for word in cleaned_transcript[:-1:-1].split(): # iterate through the cleaned transcript in reverse order, starting from the second to last word
                                 if word in self.class_names:
                                     objs_to_process.append(word)
                                 elif word == "detect":
