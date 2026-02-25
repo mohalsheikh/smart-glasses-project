@@ -12,7 +12,7 @@ This module is responsible for:
 from src.camera_handler import CameraHandler
 from src.currency_recognizer import CurrencyRecognizer
 from src.object_detector import ObjectDetector
-from src.ocr_engine2 import OCREngine2
+from src.ocr_engine import OCREngine
 from src.speech_engine import SpeechEngine
 
 import src.utils.config as config
