@@ -23,13 +23,17 @@ class MainController:
     def __init__(self) -> None:
         # Core components
         self.camera = CameraHandler()
-        self.detector = ObjectDetector(model_name="currency_detector.pt")
+        self.camera_frame_width = self.camera.frame_width # frame width from camera handler
+
+        self.detector = ObjectDetector(model_name="yolov8n.pt")
         # self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
         self.ocr = OCREngine() # unfinished.
         self.speech = SpeechEngine()
-        self.voice = VoiceInput(model_class_names=self.detector.class_names) # pass the class names from the object detector to the voice input module so it can recognize them in commands.
 
-        self.camera_frame_width = self.camera.frame_width # frame width from camera handler
+        class_names_dict = self.detector.classes # this is a map of class ID to class name. these are the objects that our YOLO model(s) know
+        self.voice = VoiceInput(model_class_names=class_names_dict) # pass the class names from the object detector to the voice input module so it can recognize them in commands.
+
+        self.class_names = list(class_names_dict.values()) # list of class names from the object detector, used for command recognition in voice input.
 
         print("⚡ MANUAL Smart Glasses System Initialized")
 
@@ -87,11 +91,10 @@ class MainController:
                     continue
 
                 last_word = cleaned_transcript.split()[-1]
-                command = last_word # for now we just take the last word as the command... TODO will change later when we have command to detect specific objs
 
                 # command routing
                 description = None
-                match command:
+                match last_word:
                     case "detect":
                         detections, annotated_frame = self.detector.detect(frame, annotate=True) # detect objects and get annotated frame
                         description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections in natural language
@@ -115,7 +118,29 @@ class MainController:
 
                         description = summarize_detections(detections, frame_width=self.camera_frame_width) # TODO change to new func
                     case _:
-                        description = "Programmers note: I recognized that word from my command grammar, but there is no logic implemented for it yet. Please add logic in manual_controller.py."
+                        # if this happens then the last word is probably a valid class name that YOLO can detect.
+                        # now we want to see what the user wants to do with this...
+                        if last_word in self.class_names:
+
+                            # we check for other terms in the cleaned transcript for two purposes: 
+                            # 1) to look for command words like 'detect' or 'read'
+                            # 2) to look for other class names that might indicate the user wants to deal with multiple classes at once
+                            objs_to_process = [last_word]
+                            
+                            for word in cleaned_transcript[:-1].split():
+                                if word in self.class_names:
+                                    objs_to_process.append(word)
+                                elif word == "detect":
+                                    # TODO detect only the specified class(es)
+                                    break
+                                elif word == "read":
+                                    # TODO read only the specified class(es)
+                                    break
+                            
+                            description = f"You said '{last_word}'. I can't do anything with that yet because the programmers are suffering from chronic laziness... there is also a possum infestation in their houses but that's not as important probably. Please tell the programmers to add the logic for this soon"
+                        else:
+                            # developer debug output for detected text that doesn't match any known commands or class names.
+                            description = "Programmers note: I recognized that word from my command grammar, but there is no logic implemented for it yet. Please add logic in manual_controller.py."
 
                 self.speech.speak(description)
                 print(f"Frame processed: {description}")

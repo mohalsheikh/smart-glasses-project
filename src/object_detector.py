@@ -123,5 +123,5 @@ class ObjectDetector:
         return detections, track_result.plot() if annotate else frame
     
     @property
-    def class_names(self):
+    def classes(self):
         return self.model.names
