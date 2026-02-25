@@ -23,7 +23,7 @@ class MainController:
     def __init__(self) -> None:
         # Core components
         self.camera = CameraHandler()
-        self.detector = ObjectDetector(model_name="yolov8n.pt")
+        self.detector = ObjectDetector(model_name="currency_detector.pt")
         # self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
         self.ocr = OCREngine() # unfinished.
         self.speech = SpeechEngine()
