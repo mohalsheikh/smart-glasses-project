@@ -1,49 +1,50 @@
+
 # src/utils/object_description.py
 
 from enum import Enum
 from typing import List, Dict, Any, Optional
 import src.utils.config as config
+import inflect
 
+_inflect = inflect.engine()
 MAX_SPEECH_ITEMS: int = 5
 
 # Small objects that need lower confidence
 SMALL_OBJECTS: set = {
-    # "Pen", "Pencil", "Toothbrush", "Spoon", "Fork", "Knife", 
-    # "Remote control", "Computer mouse", "Glasses", "Watch"
+    "Pen", "Pencil", "Toothbrush", "Spoon", "Fork", "Knife", 
+    "Remote control", "Computer mouse", "Glasses", "Watch"
 }
 
 CONFIDENCE_BY_CATEGORY: dict = {
-    # "small_objects": 0.15,
-    # "priority_objects": 0.20,
-    # "general_objects": 0.20, # 0.25,
+    "small_objects": 0.15,
+    "priority_objects": 0.20,
+    "general_objects": 0.25,
 }
 
 # Ignore noisy labels
 IGNORE_LABELS = {
-    # "Clothing", "Human arm", "Human hair", "Human leg", "Human body",
-    # "Human head", "Human ear", "Human eye", "Human mouth", "Human nose",
-    # "Human hand", "Human foot", "Human face", "Fashion accessory"
+    "Clothing", "Human arm", "Human hair", "Human leg", "Human body",
+    "Human head", "Human ear", "Human eye", "Human mouth", "Human nose",
+    "Human hand", "Human foot", "Human face", "Fashion accessory"
 }
 
 # Merge similar labels
 MERGE_LABELS = {
-    "five-dollar-back": "5 dollar bill",
-    "ten-dollar-front": "10 dollar bill",
-    # "Human face": "person", "Man": "person", "Woman": "person",
-    # "Boy": "person", "Girl": "person", "Person": "person",
-    # "Laptop computer": "laptop", "Computer keyboard": "keyboard",
-    # "Computer mouse": "mouse", "Mobile phone": "phone",
-    # "Cellular telephone": "phone", "Telephone": "phone",
-    # "Television": "TV", "Drink": "beverage",
+    "Human face": "person", "Man": "person", "Woman": "person",
+    "Boy": "person", "Girl": "person", "Person": "person",
+    "Laptop computer": "laptop", "Computer keyboard": "keyboard",
+    "Computer mouse": "mouse", "Mobile phone": "phone",
+    "Cellular telephone": "phone", "Telephone": "phone",
+    "Television": "TV", "Drink": "beverage",
 }
 
 # Priority objects
 PRIORITY_LABELS = {
-    # "person", "Door", "Door handle", "Stairs", "Chair", "Table",
-    # "Car", "Bus", "Truck", "Bicycle", "Motorcycle",
-    # "Traffic light", "Traffic sign", "Stop sign",
-    # "Laptop", "laptop", "phone", "Mug", "Bottle",
-    # "Toilet", "Sink", "Bed", "Couch"
+    "person", "Door", "Door handle", "Stairs", "Chair", "Table",
+    "Car", "Bus", "Truck", "Bicycle", "Motorcycle",
+    "Traffic light", "Traffic sign", "Stop sign",
+    "Laptop", "laptop", "phone", "Mug", "Bottle",
+    "Toilet", "Sink", "Bed", "Couch"
 }
 
 class Direction(Enum):
@@ -90,8 +91,7 @@ def add_indefinite_article(label: str) -> str:
     """Add a/an to label."""
     if not label:
         return label
-    first_letter = label[0].lower()
-    return f"an {label}" if first_letter in "aeiou" else f"a {label}"
+    return _inflect.a(label)
 
 
 def get_confidence_threshold(label: str) -> float:
@@ -102,6 +102,22 @@ def get_confidence_threshold(label: str) -> float:
         return CONFIDENCE_BY_CATEGORY["priority_objects"]
     else:
         return CONFIDENCE_BY_CATEGORY["general_objects"]
+
+def pluralize(label: str, count: int) -> str:
+    """Pluralize label correctly based on count."""
+    if count == 1:
+        return label
+
+    plural = _inflect.plural_noun(label)
+    return plural if plural else label
+
+# def _count_to_word(count: int) -> str:
+#     """Convert small integer counts to English words."""
+#     words = {
+#         2: "two", 3: "three", 4: "four", 5: "five",
+#         6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"
+#     }
+#     return words.get(count, str(count))
 
 def summarize_detections(
     detections: List[Dict[str, Any]],
@@ -147,15 +163,14 @@ def _format_detections(
             continue
 
         conf = float(d.get("confidence", 0.0))
-        # required_conf = get_confidence_threshold(normalized_label)
+        required_conf = get_confidence_threshold(normalized_label)
 
-    # if conf >= required_conf:
-        filtered.append({
-            "label": normalized_label,
-            "confidence": conf,
-            "center": d.get("center"),
-            "ocr_text": d.get("ocr_text", None) # may be None if no text attached
-        })
+        if conf >= required_conf:
+            filtered.append({
+                "label": normalized_label,
+                "confidence": conf,
+                "center": d.get("center"),
+            })
 
     if len(filtered) == 0:
         return None
@@ -172,8 +187,7 @@ def _format_detections(
     filtered = [
         {
             "label": d["label"],
-            "direction": direction_from_center(d["center"], frame_width),
-            "ocr_text": d.get("ocr_text", None) # may be None if no text attached
+            "direction": direction_from_center(d["center"], frame_width)
         }
         for d in filtered
     ]
@@ -181,33 +195,43 @@ def _format_detections(
     return filtered
 
 def _construct_description(filtered_detections: List[Dict[str, Optional[str]]]) -> str:
-    """Constructs a natural language description from the filtered detections."""
-    phrases = [] # constructed in loop below
-
+    """Constructs a natural language description from the filtered detections.
+    
+    Groups detections by (label, direction) to eliminate redundancy.
+    Example: two identical labels+directions become "two people in front of you".
+    """
+    # Group by (label, direction) to count duplicates
+    groups = {}
     for d in filtered_detections:
-        # adding article to each label
         label = d["label"]
-        label_with_article = add_indefinite_article(label)
-
         direction = d["direction"]
-
-        # constructs phrase that begins with the label (with article) and ends with description of the direction.
-        phrase = label_with_article
+        key = (label, direction)
+        groups[key] = groups.get(key, 0) + 1
+    
+    phrases = []
+    for (label, direction), count in groups.items():
+        # Build phrase based on count
+        if count == 1:
+            label_phrase = add_indefinite_article(label)
+        else:
+            # Convert to plural: "two people", "three bottles", etc.
+            plural_label = pluralize(label, count)
+            count_word = _inflect.number_to_words(count)
+            label_phrase = f"{count_word} {plural_label}"
+        
+        # Add direction
         match direction:
             case Direction.LEFT:
-                phrase = f"{label_with_article} to your left"
+                phrase = f"{label_phrase} to your left"
             case Direction.RIGHT:
-                phrase = f"{label_with_article} to your right"
+                phrase = f"{label_phrase} to your right"
             case Direction.FRONT:
-                phrase = f"{label_with_article} in front of you"
-
-        # if there is text attached to the detection, add that to the phrase as well
-        if d.get("ocr_text", None) is not None:
-            phrase += f' that says "{d["ocr_text"]}"'
-
-        phrases.append(phrase)
+                phrase = f"{label_phrase} in front of you"
+            case None:
+                phrase = label_phrase
         
-
+        phrases.append(phrase)
+    
     # Natural sentence
     if len(phrases) == 1:
         return f"I see {phrases[0]}."
