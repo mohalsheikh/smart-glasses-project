@@ -69,8 +69,6 @@ class MainController:
                 objs_to_process = self._extract_objs_from_transcript(transcript_after_command)
 
                 command = transcript_after_command.split()[0] 
-
-                print(f"recursive command routing with command='{command}' and objects={objs_to_process}")
                 description, annotated_frame = self._route_command(command, cleaned_transcript, frame, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
 
         return description, annotated_frame
