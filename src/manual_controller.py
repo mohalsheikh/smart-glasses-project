@@ -27,7 +27,7 @@ class MainController:
 
         self.detector = ObjectDetector(model_name="yolov8n.pt")
         # self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
-        self.ocr = OCREngine() # unfinished.
+        self.ocr = OCREngine()
         self.speech = SpeechEngine()
 
         class_names_dict = self.detector.classes # this is a map of class ID to class name. these are the objects that our YOLO model(s) know
@@ -46,16 +46,47 @@ class MainController:
         return s.replace("[unk]", "").strip()
     
     def _print_ocr_feedback(self, detections):
-        print("\n=== Per-object OCR test ===")
-        for i, det in enumerate(detections):
-            print(
-                f"[{i}] "
-                f"label={det.get('label')} "
-                f"confidence={det.get('confidence')} "
-                f"bbox={det.get('bbox')} "
-                f"ocr_text='{det.get('ocr_text', '')}'"
-            )
-        print("=== End per-object OCR test ===\n")
+        # =========================================================================================
+        # TEST: Per-object OCR attachment
+        # =========================================================================================
+        try:
+            print("ℹ️  Per-object OCR attachment results ℹ️")
+            print("====================================================")
+
+            for i, det in enumerate(detections):
+                # Extract Values
+                label = det.get("label")
+                confidence = det.get("confidence")
+                bbox = det.get("bbox")
+                ocr_text = det.get("ocr_text")
+                # Format confidence (round to 2 decimals)
+                confidence_str = f"{float(confidence):.2f}" if confidence is not None else "n/a"
+                # Simplify bounding box feedback (remove np.float32 text)
+                if bbox is not None:
+                    try:
+                        x1, y1, x2, y2 = bbox
+                        bbox_str = f"({int(x1)}, {int(y1)}, {int(x2)}, {int(y2)})"
+                    except Exception:
+                        bbox_str = "n/a"
+                else:
+                    bbox_str = "n/a"
+                # Format OCR text (strip whitespace, show (none) if empty)
+                ocr_text_str = (ocr_text or "").strip()
+                # Format label (strip whitespace, show n/a if empty)
+                label_str = str(label).strip() if label else "n/a"
+                # Output Results with Formtting 
+                print(f" ID [{i:02d}]")
+                print(f"   Label:         {label_str}")
+                print(f"   Conf:          {confidence_str}")
+                print(f"   BBox:          {bbox_str}")
+                if ocr_text_str:
+                    print(f"   Attached_Text: '{ocr_text_str}'")
+                else:
+                    print(f"   Attached_Text: none")
+            print("====================================================")
+
+        except Exception as e:
+            print(f"[Per-object OCR attachment ERROR] {type(e).__name__}: {e}")
 
     def run(self) -> None:    
         # frame variable used to hold the current frame from the camera.
@@ -75,9 +106,6 @@ class MainController:
 
                 if frame is None:
                     print("⚠️ No frame from camera.")
-                    continue
-
-                # If voice is enabled, start listening AFTER we take the frame.
                 # This matches the behavior you asked for (capture first, then ask the question).
                 print('\n🎙️ Listening...')
 
@@ -168,52 +196,6 @@ class MainController:
                         
                 self.speech.speak(description)
                 print(f"Frame processed: {description}")
-
-                # # next, the object detector detects objects inside of the frame.
-                # # from this we get the detection results and update the frame with annotations.
-                
-                # # print("Detection complete.")
-                
-                # # =========================================================================================
-                # # TEST: Per-object OCR attachment
-                # # =========================================================================================
-                # try:
-                #     detections = self.ocr.attach_crop_text_to_detected_objects(frame, detections)
-
-                #     print("\n=== Per-object OCR test ===")
-                #     for i, det in enumerate(detections):
-                #         print(
-                #             f"[{i}] "
-                #             f"label={det.get('label')} "
-                #             f"confidence={det.get('confidence')} "
-                #             f"bbox={det.get('bbox')} "
-                #             f"ocr_text='{det.get('ocr_text', '')}'"
-                #         )
-                #     print("=== End per-object OCR test ===\n")
-
-                # except Exception as e:
-                #     print(f"[Per-object OCR test ERROR] {type(e).__name__}: {e}")
-                # # =========================================================================================
-                # # Results: Successful attachment of OCR text to detected objects. But might have bad confidence keys.   
-                # # ==========================================================================================
-
-                # # Run OCR (Extract text) on the full frame and 
-                # # format confidence-based feedback for the user based on annotated confidence values.
-                # print("🔍 Running OCR on frame...")
-                # ocr_result = self.ocr.extract_text_with_confidence(frame)
-                # ocr_feedback = format_ocr_feedback(ocr_result)
-                # if ocr_result.get("text"):
-                #     print(ocr_feedback)
-                # else:
-                #     print("❌🔍 No text detected.\n")
-
-                # # finally, we summarize the detections and speak them out loud.
-                # description = summarize_detections(detections, frame_width=self.camera_frame_width)
-                # # print("Generated description.")
-
-                # self.speech.speak(description)
-
-                # print(f"Frame processed: {description}")
             
             if annotated_frame is not None:
                 self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.
