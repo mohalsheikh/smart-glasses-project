@@ -32,8 +32,10 @@ class MainController:
 
         class_names_dict = self.detector.classes # this is a map of class ID to class name. these are the objects that our YOLO model(s) know
         self.voice = VoiceInput(model_class_names=class_names_dict) # pass the class names from the object detector to the voice input module so it can recognize them in commands.
+        self.commands = self.voice.commands # the command grammar minus "[unk]" and the class names.
 
         self.class_names = list(class_names_dict.values()) # list of class names from the object detector, used for command recognition in voice input.
+        self.class_names.sort(key=lambda s: s.count(" "), reverse=True) # sort class names by number of words from greatest to least (determined by counting spaces)
 
         # set of all individual words that appear in class names, used for partial matching of class names in voice commands.
         self.partial_class_names = {word for name in self.class_names for word in name.split()} 
@@ -45,6 +47,18 @@ class MainController:
     def _remove_unk(self, s: str) -> str:
         return s.replace("[unk]", "").strip()
     
+    # helper to extract object names from the transcript for commands.
+    def _extract_objs_from_transcript(self, transcript: str) -> list[str]:
+        objs_to_process = []
+
+        for class_name in self.class_names:
+            if class_name in transcript:
+                objs_to_process.append(class_name)
+                transcript = transcript.replace(class_name, "") # remove the class name from the transcript so that we can check for command words without the class names in the way
+
+        return objs_to_process
+    
+    # helper to print OCR feedback for each detected object in a readable format.
     def _print_ocr_feedback(self, detections):
         # =========================================================================================
         # TEST: Per-object OCR attachment
@@ -134,7 +148,8 @@ class MainController:
                     continue
 
                 # command routing
-                last_word = cleaned_transcript.split()[-1]
+                split_transcript = cleaned_transcript.split()
+                last_word = split_transcript[-1]
 
                 description = None
                 match last_word:
@@ -150,49 +165,58 @@ class MainController:
                         detections = [det for det in detections if det.get("ocr_text")] # filter to just objects with text
                         description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections of objects with text in natural language
                     case _:
-                        # if this happens then the last word is a valid class name that YOLO can detect, or part of one.
-                        # now we want to see what the user wants to do with this...
+                        # if this happens we assume the user wants to detect/read specific objects mentioned in the command.
 
+
+                        # TODO this still isn't functioning correctly, i want to find the last occurrence of a command in the string
+                        print(self.commands)
+                        index_of_command = max(cleaned_transcript.rfind(cmd) for cmd in self.commands)
+                        print(f"Index of command word in transcript: {index_of_command}")
+                        transcript_after_command = cleaned_transcript[index_of_command:]
+                        print(f"Transcript after command word: '{transcript_after_command}'")
+                        
+                        objs_to_process = self._extract_objs_from_transcript(transcript_after_command)
+                    
                         # we check for other terms in the cleaned transcript for two purposes: 
                         # 1) to look for command words like 'detect' or 'read'
                         # 2) to look for other class names that might indicate the user wants to deal with multiple classes at once
                         #    some class names are multiple words, so when we're iterating through the transcript we're checking for partial matches 
                         #    and building up potential multi-word class names that the user might be referring to. 
-                        partial_obj_name = None 
-                        objs_to_process = []
+                        # partial_obj_name = None 
+                        # objs_to_process = []
 
-                        # processing last word first
-                        if last_word in self.partial_class_names:
-                            partial_obj_name = last_word # start building a potential multi-word class name with the last word if it's a partial match
-                        elif last_word in self.class_names:
-                            objs_to_process.append(last_word) # append last word to objects to process if it's a valid class name and not part of a larger class name
+                        # # processing last word first
+                        # if last_word in self.partial_class_names:
+                        #     partial_obj_name = last_word # start building a potential multi-word class name with the last word if it's a partial match
+                        # elif last_word in self.class_names:
+                        #     objs_to_process.append(last_word) # append last word to objects to process if it's a valid class name and not part of a larger class name
                         
-                        for word in cleaned_transcript[:-1:-1].split(): # iterate through the cleaned transcript in reverse order, starting from the second to last word
-                            # first check for partial match
-                            if word in self.partial_class_names:
-                                if partial_obj_name is None: # if we don't already have a partial object name, start one with the current word
-                                    partial_obj_name = word
-                                else:
-                                    partial_obj_name = f"{word} {partial_obj_name}" # prepend word to the existing partial object name
+                        # for word in cleaned_transcript[:-1:-1].split(): # iterate through the cleaned transcript in reverse order, starting from the second to last word
+                        #     # first check for partial match
+                        #     if word in self.partial_class_names:
+                        #         if partial_obj_name is None: # if we don't already have a partial object name, start one with the current word
+                        #             partial_obj_name = word
+                        #         else:
+                        #             partial_obj_name = f"{word} {partial_obj_name}" # prepend word to the existing partial object name
 
-                                    # if the new partial object name is a full match for a class name, add it to the objects to process and reset the partial object name
-                                    if partial_obj_name in self.class_names: 
-                                        objs_to_process.append(partial_obj_name)
-                                        partial_obj_name = None
+                        #             # if the new partial object name is a full match for a class name, add it to the objects to process and reset the partial object name
+                        #             if partial_obj_name in self.class_names: 
+                        #                 objs_to_process.append(partial_obj_name)
+                        #                 partial_obj_name = None
 
-                            # if not partial match, check for full match
-                            elif word in self.class_names: 
-                                objs_to_process.append(word) # append word to objects to process if it's a valid class name and not part of a larger class name
+                        #     # if not partial match, check for full match
+                        #     elif word in self.class_names: 
+                        #         objs_to_process.append(word) # append word to objects to process if it's a valid class name and not part of a larger class name
 
-                            # if neither, check for command words like 'detect' or 'read' 
-                            elif word == "detect":
-                                # TODO detect only the specified class(es)
-                                break
-                            elif word == "read":
-                                # TODO read only the specified class(es)
-                                break
+                        #     # if neither, check for command words like 'detect' or 'read' 
+                        #     elif word == "detect":
+                        #         # TODO detect only the specified class(es)
+                        #         break
+                        #     elif word == "read":
+                        #         # TODO read only the specified class(es)
+                        #         break
                         
-                        description = f"Final partial obj name was {partial_obj_name}, final objs to process: {objs_to_process}. yipee"
+                        description = f"Final objs to process: {objs_to_process}. yipee"
                         
                 self.speech.speak(description)
                 print(f"Frame processed: {description}")
