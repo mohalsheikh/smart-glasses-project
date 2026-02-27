@@ -42,6 +42,39 @@ class MainController:
 
         print("⚡ MANUAL Smart Glasses System Initialized")
 
+    # determines action to take based on the value of command, and returns a natural language description of the result to be spoken to the user.
+    # objs is the list of objects that we want to process. If it is none, we are processing all objects that the ObjectDetector knows.
+    def _route_command(self, command: str, cleaned_transcript: str, frame, objs: list[str] = None) -> str:
+        annotated_frame = None
+        match command:
+            case "detect":
+                detections, annotated_frame = self.detector.detect(frame, annotate=True, objects=objs) # detect objects and get annotated frame
+                description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections in natural language
+            case "read": 
+                detections, annotated_frame = self.detector.detect(frame, annotate=True, objects=objs) # detect objects and get annotated frame
+                detections = self.ocr.attach_crop_text_to_detected_objects(frame, detections) # read text on objects
+
+                self._print_ocr_feedback(detections)
+
+                detections = [det for det in detections if det.get("ocr_text")] # filter to just objects with text
+                description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections of objects with text in natural language
+            case _:
+                # if this happens we assume the user wants to detect/read specific objects mentioned in the command.
+                
+                # find the index of the command word in the transcript so that we can extract the part of the transcript after the command word, which should contain the object names that the user wants to deal with.
+                index_of_command = max([cleaned_transcript.rfind(cmd) for cmd in self.commands])
+                transcript_after_command = cleaned_transcript[index_of_command:]
+                
+                # extract object names from the part of the transcript after the command word. 
+                objs_to_process = self._extract_objs_from_transcript(transcript_after_command)
+
+                command = transcript_after_command.split()[0] 
+
+                print(f"recursive command routing with command='{command}' and objects={objs_to_process}")
+                description, annotated_frame = self._route_command(command, cleaned_transcript, frame, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
+
+        return description, annotated_frame
+
     # helper to clean up Vosk's unknown token from results.
     # We replace it with empty string and then strip whitespace. "[unk]" becomes "", something like "detect [unk]" becomes "detect". 
     def _remove_unk(self, s: str) -> str:
@@ -117,12 +150,12 @@ class MainController:
 
                 # first, the camera handler obtains a frame from the camera...
                 frame = self.camera.capture_frame() 
-
                 if frame is None:
+                    # continue to the next iteration of the loop if we didn't get a frame
                     print("⚠️ No frame from camera.")
-                # This matches the behavior you asked for (capture first, then ask the question).
-                print('\n🎙️ Listening...')
+                    continue
 
+                # listen for voice input from the user.
                 try:
                     transcript = self.voice.listen_command()
                 except Exception as e:
@@ -147,79 +180,15 @@ class MainController:
                     self.speech.speak("Sorry, I didn't catch that.")
                     continue
 
-                # command routing
+                # command routing determines what action to take based on the transcript.
                 split_transcript = cleaned_transcript.split()
-                last_word = split_transcript[-1]
+                last_word = split_transcript[-1] # We assume the command is the last_word in the cleaned transcript... if it isn't, it is likely an object name that the user wants to detect/read.
 
-                description = None
-                match last_word:
-                    case "detect":
-                        detections, annotated_frame = self.detector.detect(frame, annotate=True) # detect objects and get annotated frame
-                        description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections in natural language
-                    case "read": 
-                        detections, annotated_frame = self.detector.detect(frame, annotate=True) # detect objects and get annotated frame
-                        detections = self.ocr.attach_crop_text_to_detected_objects(frame, detections) # read text on objects
-
-                        self._print_ocr_feedback(detections)
-
-                        detections = [det for det in detections if det.get("ocr_text")] # filter to just objects with text
-                        description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections of objects with text in natural language
-                    case _:
-                        # if this happens we assume the user wants to detect/read specific objects mentioned in the command.
-
-
-                        # TODO this still isn't functioning correctly, i want to find the last occurrence of a command in the string
-                        print(self.commands)
-                        index_of_command = max(cleaned_transcript.rfind(cmd) for cmd in self.commands)
-                        print(f"Index of command word in transcript: {index_of_command}")
-                        transcript_after_command = cleaned_transcript[index_of_command:]
-                        print(f"Transcript after command word: '{transcript_after_command}'")
-                        
-                        objs_to_process = self._extract_objs_from_transcript(transcript_after_command)
-                    
-                        # we check for other terms in the cleaned transcript for two purposes: 
-                        # 1) to look for command words like 'detect' or 'read'
-                        # 2) to look for other class names that might indicate the user wants to deal with multiple classes at once
-                        #    some class names are multiple words, so when we're iterating through the transcript we're checking for partial matches 
-                        #    and building up potential multi-word class names that the user might be referring to. 
-                        # partial_obj_name = None 
-                        # objs_to_process = []
-
-                        # # processing last word first
-                        # if last_word in self.partial_class_names:
-                        #     partial_obj_name = last_word # start building a potential multi-word class name with the last word if it's a partial match
-                        # elif last_word in self.class_names:
-                        #     objs_to_process.append(last_word) # append last word to objects to process if it's a valid class name and not part of a larger class name
-                        
-                        # for word in cleaned_transcript[:-1:-1].split(): # iterate through the cleaned transcript in reverse order, starting from the second to last word
-                        #     # first check for partial match
-                        #     if word in self.partial_class_names:
-                        #         if partial_obj_name is None: # if we don't already have a partial object name, start one with the current word
-                        #             partial_obj_name = word
-                        #         else:
-                        #             partial_obj_name = f"{word} {partial_obj_name}" # prepend word to the existing partial object name
-
-                        #             # if the new partial object name is a full match for a class name, add it to the objects to process and reset the partial object name
-                        #             if partial_obj_name in self.class_names: 
-                        #                 objs_to_process.append(partial_obj_name)
-                        #                 partial_obj_name = None
-
-                        #     # if not partial match, check for full match
-                        #     elif word in self.class_names: 
-                        #         objs_to_process.append(word) # append word to objects to process if it's a valid class name and not part of a larger class name
-
-                        #     # if neither, check for command words like 'detect' or 'read' 
-                        #     elif word == "detect":
-                        #         # TODO detect only the specified class(es)
-                        #         break
-                        #     elif word == "read":
-                        #         # TODO read only the specified class(es)
-                        #         break
-                        
-                        description = f"Final objs to process: {objs_to_process}. yipee"
-                        
+                description, annotated_frame = self._route_command(last_word, cleaned_transcript, frame)
+            
                 self.speech.speak(description)
                 print(f"Frame processed: {description}")
             
             if annotated_frame is not None:
+                print("Displaying annotated frame.")
                 self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.

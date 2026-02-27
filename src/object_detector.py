@@ -59,12 +59,14 @@ class ObjectDetector:
         except Exception as e:
             raise RuntimeError(f"Failed to load model '{model_name}' with exception: {e}\nMake sure that you specify a valid file path to a YOLO model.")
         
+        self.name_to_id = {name: id for id, name in self.model.names.items()}
+        
         # print(self.model.names)
 
     # wrapper for the model's track method with the parameters set in __init__.
     # the yolo track function, when given one frame, returns a list of one result every time if it is successful,
     # so we just return the first element of that list
-    def _track(self, frame: np.ndarray, persist: bool = True):
+    def _track(self, frame: np.ndarray, persist: bool = True, objects: list[str] = None):
         return self.model.track(
             source = frame,
             persist = persist,
@@ -73,7 +75,8 @@ class ObjectDetector:
             imgsz = self.imgsz,
             tracker = self.tracker,
             max_det = self.max_det,
-            verbose = False
+            verbose = False,
+            classes = [self.name_to_id[obj] for obj in objects] if objects else None
         )[0]
     
     @staticmethod
@@ -82,10 +85,10 @@ class ObjectDetector:
 
     # returns tuple (detections, frame).
     # if annotate is True, frame is the annotated frame, otherwise it's the original frame.
-    def detect(self, frame: np.ndarray, annotate: bool = False):
+    def detect(self, frame: np.ndarray, annotate: bool = False, objects: list[str] = None):
         # attempt to track objects in the frame. if tracking fails, raise an error
         try:
-            track_result = self._track(frame)
+            track_result = self._track(frame, objects=objects)
         except Exception as e:
             raise RuntimeError(f"Tracking failed with exception: {e}")
         
