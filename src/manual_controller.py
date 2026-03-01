@@ -80,14 +80,14 @@ class MainController:
     
     # helper to extract object names from the transcript for commands.
     def _extract_objs_from_transcript(self, transcript: str) -> list[str]:
-        objs_to_process = []
+        objs_to_process = set()
 
         for class_name in self.class_names:
             if class_name in transcript:
-                objs_to_process.append(class_name)
+                objs_to_process.add(class_name)
                 transcript = transcript.replace(class_name, "") # remove the class name from the transcript so that we can check for command words without the class names in the way
 
-        return objs_to_process
+        return list(objs_to_process)
     
     # helper to print OCR feedback for each detected object in a readable format.
     def _print_ocr_feedback(self, detections):
