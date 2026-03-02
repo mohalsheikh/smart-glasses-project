@@ -68,8 +68,12 @@ class MainController:
                 # extract object names from the part of the transcript after the command word. 
                 objs_to_process = self._extract_objs_from_transcript(transcript_after_command)
 
-                command = transcript_after_command.split()[0] 
-                description, annotated_frame = self._route_command(command, cleaned_transcript, frame, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
+                command = transcript_after_command.split()[0]
+                if command in self.commands: 
+                    description, annotated_frame = self._route_command(command, cleaned_transcript, frame, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
+                else:
+                    description = f"Sorry, I didn't understand the command. I heard '{cleaned_transcript}'."
+                    annotated_frame = frame.copy() if frame is not None else None
 
         return description, annotated_frame
 
