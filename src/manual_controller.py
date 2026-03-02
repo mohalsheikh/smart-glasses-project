@@ -25,7 +25,7 @@ class MainController:
         self.camera = CameraHandler()
         self.camera_frame_width = self.camera.frame_width # frame width from camera handler
 
-        self.detector = ObjectDetector(model_name="yolov8n.pt")
+        self.detector = ObjectDetector(model_names=["yolov8n.pt", "currency_detector.pt"])
         # To use multiple models, pass model_names instead:
         # self.detector = ObjectDetector(model_names=["yolov8n.pt", "currency_detector.pt"])
 
