@@ -9,6 +9,7 @@ This module is responsible for:
 - Delegating description/summarization to helper utilities
 """
 
+
 from src.camera_handler import CameraHandler
 from src.currency_recognizer import CurrencyRecognizer
 from src.object_detector import ObjectDetector
@@ -21,6 +22,11 @@ from src.utils.object_description import summarize_detections, format_ocr_feedba
 
 import threading
 from queue import Queue
+import enum
+
+class VoiceInputState(enum.Enum):
+    WAITING_FOR_WAKE_WORD = 1,
+    WAITING_FOR_COMMAND = 2
 
 class MainController:
     def __init__(self) -> None:
@@ -43,40 +49,51 @@ class MainController:
         # set of all individual words that appear in class names, used for partial matching of class names in voice commands.
         self.partial_class_names = {word for name in self.class_names for word in name.split()}
 
-        self.frame_queue = Queue() # queue for passing frames to the display thread
-        self.speech_queue = Queue() # queue for passing text to the speech thread
+        self.speech_queue = Queue() # queue for text to be spoken by the speech thread
+        self.voice_input_result_q = Queue() # queue for results from voice input thread
+        self.voice_input_state_q = Queue() # queue for state of voice input thread (waiting for wake word or waiting for command)
 
         print("⚡ MANUAL Smart Glasses System Initialized")
 
-    # # thread for displaying frames in the opencv window, in parallel with the main loop.
-    # def _display_worker(self, frame_queue: Queue):
-    #     frame = None # variable to hold the current frame to display
-
-    #     # shows frame every iteration, updating the frame variable if there is a new frame in the queue. 
-    #     while True:
-    #         if not frame_queue.empty():
-    #             frame = frame_queue.get()
-            
-    #         self.camera.show_image(frame)
-
-    #         if self.camera.wait_key_press(key='q'): # wait key press that can be used to quit the program. 
-    #             break
-
-    # thread for speech tasks, in parallel with the main loop.
-    def _speech_worker(self, speech_queue: Queue):
-        # only speaks if there is a new text in the speech queue.
+    # thread for speech output tasks, in parallel with the main loop.
+    def _tts_worker(self):
+        # only speaks if there is a new text in the speech queue, which is managed by the main thread.
         while True:
             try:
-                text = speech_queue.get(timeout=0.1)
+                text = self.speech_queue.get(timeout=0.1)
+                self.speech.speak(text)
             except Exception:
                 continue
 
-    def _start_worker_threads(self):
-        # display_thread = threading.Thread(target=self._display_worker, name="DisplayThread", args=(self.frame_queue,), daemon=True)
-        speech_thread = threading.Thread(target=self._speech_worker, name="SpeechThread", args=(self.speech_queue,), daemon=True)
+    # thread for voice input tasks, in parallel with the main loop.
+    # has two states: waiting for wake word and waiting for command.
+    # states are updated by the main thread through the voice_input_state_q, and results are sent back to the main thread through the voice_input_result_q.
+    def _voice_input_worker(self):
+        waiting_for = VoiceInputState.WAITING_FOR_WAKE_WORD
 
-        # display_thread.start()
-        speech_thread.start()
+        while True:
+            try:
+                waiting_for = self.voice_input_state_q.get(timeout=1)
+            except Exception:
+                pass
+
+            match waiting_for:
+                case VoiceInputState.WAITING_FOR_WAKE_WORD:
+                    wake_word_input = self.voice.listen_wake_word(timeout_seconds=8.0)
+                    self.voice_input_result_q.put((VoiceInputState.WAITING_FOR_WAKE_WORD, wake_word_input)) # put the wake word input in the queue for the main thread to process
+
+                case VoiceInputState.WAITING_FOR_COMMAND:
+                    command_input = self.voice.listen_command()
+                    self.voice_input_result_q.put((VoiceInputState.WAITING_FOR_COMMAND, command_input)) # put the command input in the queue for the main thread to process
+                    
+
+
+    def _start_worker_threads(self):
+        tts_thread = threading.Thread(target=self._tts_worker, name="TTSThread", daemon=True)
+        voice_input_thread = threading.Thread(target=self._voice_input_worker, name="VoiceInputThread", daemon=True)
+
+        tts_thread.start()
+        voice_input_thread.start()
 
     # determines action to take based on the value of command, and returns a natural language description of the result to be spoken to the user.
     # objs is the list of objects that we want to process. If it is none, we are processing all objects that the ObjectDetector knows.
@@ -179,63 +196,90 @@ class MainController:
         frame = self.camera.capture_and_show_frame()
         annotated_frame = frame.copy() if frame is not None else None
 
-        self.camera.show_image(frame) # show the initial frame in the window
-        # self.frame_queue.put(annotated_frame) # put the initial frame in the queue for the display thread to show
         self._start_worker_threads() # start the display and speech worker threads
 
         while True: # main loop
-            wake_word_input = self.voice.listen_wake_word(timeout_seconds=8.0)
-            print(f"Wake word input: '{wake_word_input}'")  # Debug print for wake word input
+            self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.
+            if self.camera.wait_key_press('q', delay=10): # if the user presses 'q', we quit the program.
+                print("Exiting program.")
+                break
 
-            if 'vision' in wake_word_input:  # if the user said the wake word, we start the processing pipeline.
-                # self.speech.speak("I'm listening!")
-                self.speech_queue.put("I'm listening!")
-
-                # first, the camera handler obtains a frame from the camera...
-                frame = self.camera.capture_frame() 
-                if frame is None:
-                    # continue to the next iteration of the loop if we didn't get a frame
-                    print("⚠️ No frame from camera.")
-                    continue
-
-                # listen for voice input from the user.
-                try:
-                    transcript = self.voice.listen_command()
-                except Exception as e:
-                    print(f"[VoiceInput ERROR] {type(e).__name__}: {e}")
-                    raise e
-
-                # continue if we didn't get any transcript
-                if not transcript:
-                    print("🎙️ No speech detected.")
-                    # self.speech.speak("I didn't hear a command.")
-                    self.speech_queue.put("I didn't hear a command.")
-                    continue
-                
-                # if we got a transcript, print it out for debugging and then clean it up by removing any "[unk]" tokens that Vosk might have included for unrecognized words.
-                print(f"🎙️ Heard: {transcript}")
-
-                cleaned_transcript = self._remove_unk(transcript)
-                print(f"🎙️ Cleaned transcript: {cleaned_transcript}")
-
-                # if after cleaning the transcript is empty, that means we didn't recognize any valid command words, so we should continue...
-                if not cleaned_transcript:
-                    print("🎙️ Command not recognized. Try again.")
-                    # self.speech.speak("Sorry, I didn't catch that.")
-                    self.speech_queue.put("Sorry, I didn't catch that.")
-                    continue
-
-                # command routing determines what action to take based on the transcript.
-                split_transcript = cleaned_transcript.split()
-                last_word = split_transcript[-1] # We assume the command is the last_word in the cleaned transcript... if it isn't, it is likely an object name that the user wants to detect/read.
-
-                description, annotated_frame = self._route_command(last_word, cleaned_transcript, frame)
-                # self.frame_queue.put(annotated_frame) # put the annotated frame in the queue for the display thread to show
+            try:
+                voice_input_result = self.voice_input_result_q.get_nowait() # check if there is a new result from the voice input thread
+            except Exception:
+                continue
             
-                # self.speech.speak(description)
-                self.speech_queue.put(description)
-                print(f"Frame processed: {description}")
+            voice_input_state = voice_input_result[0]
+            transcript = voice_input_result[1]
+            match voice_input_state:
+                case VoiceInputState.WAITING_FOR_WAKE_WORD:
+                    print(f"🎙️ Wake word input: '{transcript}'")  # Debug print for wake word input
+                    
+                    if 'vision' in transcript:  # if the user said the wake word, we start the processing pipeline.
+                        self.speech_queue.put("I'm listening!")
+                        self.voice_input_state_q.put(VoiceInputState.WAITING_FOR_COMMAND) # tell the voice input thread to start listening for a command
+                case VoiceInputState.WAITING_FOR_COMMAND:
+                        # before processing the command, go back to waiting for the wake word, because right now this is always what we want.
+                        self.voice_input_state_q.put(VoiceInputState.WAITING_FOR_WAKE_WORD) 
+
+                        print(f"🎙️ Heard command: '{transcript}'")
+                        
+                        # continue if we didn't get any transcript
+                        if not transcript:
+                            print("🎙️ No speech detected.")
+                            # self.speech.speak("I didn't hear a command.")
+                            self.speech_queue.put("I didn't hear a command.")
+                            continue
+                        
+                        # if we got a transcript, print it out for debugging and then clean it up by removing any "[unk]" tokens that Vosk might have included for unrecognized words.
+                        print(f"🎙️ Heard: {transcript}")
+
+                        cleaned_transcript = self._remove_unk(transcript)
+                        print(f"🎙️ Cleaned transcript: {cleaned_transcript}")
+
+                        # if after cleaning the transcript is empty, that means we didn't recognize any valid command words, so we should continue...
+                        if not cleaned_transcript:
+                            print("🎙️ Command not recognized. Try again.")
+                            # self.speech.speak("Sorry, I didn't catch that.")
+                            self.speech_queue.put("Sorry, I didn't catch that.")
+                            continue
+
+                        frame = self.camera.capture_frame() # capture a new frame from the camera to process for this command
+
+                        # command routing determines what action to take based on the transcript.
+                        split_transcript = cleaned_transcript.split()
+                        last_word = split_transcript[-1] # We assume the command is the last_word in the cleaned transcript... if it isn't, it is likely an object name that the user wants to detect/read.
+
+                        description, annotated_frame = self._route_command(last_word, cleaned_transcript, frame)
+                        # self.frame_queue.put(annotated_frame) # put the annotated frame in the queue for the display thread to show
+                    
+                        # self.speech.speak(description)
+                        self.speech_queue.put(description)
+                        print(f"Frame processed: {description}")
+
+            # wake_word_input = self.voice.listen_wake_word(timeout_seconds=8.0)
+            # print(f"Wake word input: '{wake_word_input}'")  # Debug print for wake word input
+
+            # if 'vision' in wake_word_input:  # if the user said the wake word, we start the processing pipeline.
+            #     # self.speech.speak("I'm listening!")
+            #     self.speech_queue.put("I'm listening!")
+
+            #     # first, the camera handler obtains a frame from the camera...
+            #     frame = self.camera.capture_frame() 
+            #     if frame is None:
+            #         # continue to the next iteration of the loop if we didn't get a frame
+            #         print("⚠️ No frame from camera.")
+            #         continue
+
+            #     # listen for voice input from the user.
+            #     try:
+            #         transcript = self.voice.listen_command()
+            #     except Exception as e:
+            #         print(f"[VoiceInput ERROR] {type(e).__name__}: {e}")
+            #         raise e
+
+           
             
-            if annotated_frame is not None:
-                print("Displaying annotated frame.")
-                self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.
+            # if annotated_frame is not None:
+            #     print("Displaying annotated frame.")
+            #     self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.
