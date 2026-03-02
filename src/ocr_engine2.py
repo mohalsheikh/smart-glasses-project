@@ -27,7 +27,7 @@ class OCREngine2:
         languages: List[str] = None,
         gpu: bool = False,
         enable_word_filter: bool = True,
-        min_zipf: float = 2.0,          # 2.0 = “rare/unlikely”; bump to 3.0 to be stricter
+        min_zipf: float = 2.0,          # 2.0 = “rare/unlikely”; bump to 3.0 to be stricter.
         drop_gibberish_tokens: bool = False
         ):
 

@@ -151,7 +151,7 @@ class MainController:
                         ocr_text = det.get("ocr_text")
                         # Format confidence (round to 2 decimals)
                         confidence_str = f"{float(confidence):.2f}" if confidence is not None else "n/a"
-                        # Simplify bounding box feedback (remove np.float32 text)
+                        # Simplify bounding box feedback (remove np.float32 text).
                         if bbox is not None:
                             try:
                                 x1, y1, x2, y2 = bbox
