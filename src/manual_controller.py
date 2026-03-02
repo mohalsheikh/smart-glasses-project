@@ -19,6 +19,9 @@ from src.voice_input import VoiceInput
 import src.utils.config as config
 from src.utils.object_description import summarize_detections, format_ocr_feedback
 
+import threading
+from queue import Queue
+
 class MainController:
     def __init__(self) -> None:
         # Core components
@@ -38,9 +41,42 @@ class MainController:
         self.class_names.sort(key=lambda s: s.count(" "), reverse=True) # sort class names by number of words from greatest to least (determined by counting spaces)
 
         # set of all individual words that appear in class names, used for partial matching of class names in voice commands.
-        self.partial_class_names = {word for name in self.class_names for word in name.split()} 
+        self.partial_class_names = {word for name in self.class_names for word in name.split()}
+
+        self.frame_queue = Queue() # queue for passing frames to the display thread
+        self.speech_queue = Queue() # queue for passing text to the speech thread
 
         print("⚡ MANUAL Smart Glasses System Initialized")
+
+    # # thread for displaying frames in the opencv window, in parallel with the main loop.
+    # def _display_worker(self, frame_queue: Queue):
+    #     frame = None # variable to hold the current frame to display
+
+    #     # shows frame every iteration, updating the frame variable if there is a new frame in the queue. 
+    #     while True:
+    #         if not frame_queue.empty():
+    #             frame = frame_queue.get()
+            
+    #         self.camera.show_image(frame)
+
+    #         if self.camera.wait_key_press(key='q'): # wait key press that can be used to quit the program. 
+    #             break
+
+    # thread for speech tasks, in parallel with the main loop.
+    def _speech_worker(self, speech_queue: Queue):
+        # only speaks if there is a new text in the speech queue.
+        while True:
+            try:
+                text = speech_queue.get(timeout=0.1)
+            except Exception:
+                continue
+
+    def _start_worker_threads(self):
+        # display_thread = threading.Thread(target=self._display_worker, name="DisplayThread", args=(self.frame_queue,), daemon=True)
+        speech_thread = threading.Thread(target=self._speech_worker, name="SpeechThread", args=(self.speech_queue,), daemon=True)
+
+        # display_thread.start()
+        speech_thread.start()
 
     # determines action to take based on the value of command, and returns a natural language description of the result to be spoken to the user.
     # objs is the list of objects that we want to process. If it is none, we are processing all objects that the ObjectDetector knows.
@@ -139,12 +175,17 @@ class MainController:
         frame = self.camera.capture_and_show_frame()
         annotated_frame = frame.copy() if frame is not None else None
 
+        self.camera.show_image(frame) # show the initial frame in the window
+        # self.frame_queue.put(annotated_frame) # put the initial frame in the queue for the display thread to show
+        self._start_worker_threads() # start the display and speech worker threads
+
         while True: # main loop
             wake_word_input = self.voice.listen_wake_word(timeout_seconds=8.0)
             print(f"Wake word input: '{wake_word_input}'")  # Debug print for wake word input
 
             if 'vision' in wake_word_input:  # if the user said the wake word, we start the processing pipeline.
-                self.speech.speak("I'm listening!")
+                # self.speech.speak("I'm listening!")
+                self.speech_queue.put("I'm listening!")
 
                 # first, the camera handler obtains a frame from the camera...
                 frame = self.camera.capture_frame() 
@@ -163,7 +204,8 @@ class MainController:
                 # continue if we didn't get any transcript
                 if not transcript:
                     print("🎙️ No speech detected.")
-                    self.speech.speak("I didn't hear a command.")
+                    # self.speech.speak("I didn't hear a command.")
+                    self.speech_queue.put("I didn't hear a command.")
                     continue
                 
                 # if we got a transcript, print it out for debugging and then clean it up by removing any "[unk]" tokens that Vosk might have included for unrecognized words.
@@ -175,7 +217,8 @@ class MainController:
                 # if after cleaning the transcript is empty, that means we didn't recognize any valid command words, so we should continue...
                 if not cleaned_transcript:
                     print("🎙️ Command not recognized. Try again.")
-                    self.speech.speak("Sorry, I didn't catch that.")
+                    # self.speech.speak("Sorry, I didn't catch that.")
+                    self.speech_queue.put("Sorry, I didn't catch that.")
                     continue
 
                 # command routing determines what action to take based on the transcript.
@@ -183,8 +226,10 @@ class MainController:
                 last_word = split_transcript[-1] # We assume the command is the last_word in the cleaned transcript... if it isn't, it is likely an object name that the user wants to detect/read.
 
                 description, annotated_frame = self._route_command(last_word, cleaned_transcript, frame)
+                # self.frame_queue.put(annotated_frame) # put the annotated frame in the queue for the display thread to show
             
-                self.speech.speak(description)
+                # self.speech.speak(description)
+                self.speech_queue.put(description)
                 print(f"Frame processed: {description}")
             
             if annotated_frame is not None:
