@@ -7,22 +7,16 @@ from ultralytics import YOLO
 from src.utils.config import DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT
 import numpy as np
 
-DEFAULT_MODEL_NAME: str = "yolov8n-oiv7.pt"
-DEFAULT_YOLO_CONFIDENCE_THRESHOLD: float = 0.20 
-DEFAULT_IOU_THRESHOLD: float = 0.45
-DEFAULT_TRACKER: str = "bytetrack.yaml"
-DEFAULT_MAX_DETECTIONS: int = 100
-
 class ObjectDetector:
     # initializes the detector with specified parameters or defaults from config.
     def __init__(
             self,
-            model_name: str = DEFAULT_MODEL_NAME, # path to the YOLO model
-            conf: float = DEFAULT_YOLO_CONFIDENCE_THRESHOLD, # confidence threshold
-            iou: float = DEFAULT_IOU_THRESHOLD, # IoU threshold
+            model_name: str, # path to the YOLO model
+            conf: float = 0.20, # confidence threshold
+            iou: float = 0.45, # IoU threshold
             imgsz: int = DEFAULT_FRAME_WIDTH if DEFAULT_FRAME_WIDTH > DEFAULT_FRAME_HEIGHT else DEFAULT_FRAME_HEIGHT, # image size for model input
-            tracker: str = DEFAULT_TRACKER, # the tracker we're using
-            max_det: int = DEFAULT_MAX_DETECTIONS # maximum number of objects to detect in a frame
+            tracker: str = "bytetrack.yaml", # the tracker we're using
+            max_det: int = 100 # maximum number of objects to detect in a frame
         ):
 
         # parameters cannot be None and must be of the types specified in the function signature.
@@ -127,3 +121,7 @@ class ObjectDetector:
         # always return detections.
         # if annotate is true, return annotated frame, otherwise return original frame
         return detections, track_result.plot() if annotate else frame
+    
+    @property
+    def classes(self):
+        return self.model.names

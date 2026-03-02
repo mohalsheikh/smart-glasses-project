@@ -1,9 +1,12 @@
+
 # src/utils/object_description.py
 
 from enum import Enum
 from typing import List, Dict, Any, Optional
 import src.utils.config as config
+import inflect
 
+_inflect = inflect.engine()
 MAX_SPEECH_ITEMS: int = 5
 
 # Small objects that need lower confidence
@@ -88,8 +91,7 @@ def add_indefinite_article(label: str) -> str:
     """Add a/an to label."""
     if not label:
         return label
-    first_letter = label[0].lower()
-    return f"an {label}" if first_letter in "aeiou" else f"a {label}"
+    return _inflect.a(label)
 
 
 def get_confidence_threshold(label: str) -> float:
@@ -100,6 +102,22 @@ def get_confidence_threshold(label: str) -> float:
         return CONFIDENCE_BY_CATEGORY["priority_objects"]
     else:
         return CONFIDENCE_BY_CATEGORY["general_objects"]
+
+def pluralize(label: str, count: int) -> str:
+    """Pluralize label correctly based on count."""
+    if count == 1:
+        return label
+
+    plural = _inflect.plural_noun(label)
+    return plural if plural else label
+
+# def _count_to_word(count: int) -> str:
+#     """Convert small integer counts to English words."""
+#     words = {
+#         2: "two", 3: "three", 4: "four", 5: "five",
+#         6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten"
+#     }
+#     return words.get(count, str(count))
 
 def summarize_detections(
     detections: List[Dict[str, Any]],
@@ -177,29 +195,43 @@ def _format_detections(
     return filtered
 
 def _construct_description(filtered_detections: List[Dict[str, Optional[str]]]) -> str:
-    """Constructs a natural language description from the filtered detections."""
-    phrases = [] # constructed in loop below
-
+    """Constructs a natural language description from the filtered detections.
+    
+    Groups detections by (label, direction) to eliminate redundancy.
+    Example: two identical labels+directions become "two people in front of you".
+    """
+    # Group by (label, direction) to count duplicates
+    groups = {}
     for d in filtered_detections:
-        # adding article to each label
         label = d["label"]
-        label_with_article = add_indefinite_article(label)
-
         direction = d["direction"]
-
-        # constructs phrase that begins with the label (with article) and ends with description of the direction.
-        phrase = label_with_article
+        key = (label, direction)
+        groups[key] = groups.get(key, 0) + 1
+    
+    phrases = []
+    for (label, direction), count in groups.items():
+        # Build phrase based on count
+        if count == 1:
+            label_phrase = add_indefinite_article(label)
+        else:
+            # Convert to plural: "two people", "three bottles", etc.
+            plural_label = pluralize(label, count)
+            count_word = _inflect.number_to_words(count)
+            label_phrase = f"{count_word} {plural_label}"
+        
+        # Add direction
         match direction:
             case Direction.LEFT:
-                phrase = f"{label_with_article} to your left"
+                phrase = f"{label_phrase} to your left"
             case Direction.RIGHT:
-                phrase = f"{label_with_article} to your right"
+                phrase = f"{label_phrase} to your right"
             case Direction.FRONT:
-                phrase = f"{label_with_article} in front of you"
-
-        phrases.append(phrase)
+                phrase = f"{label_phrase} in front of you"
+            case None:
+                phrase = label_phrase
         
-
+        phrases.append(phrase)
+    
     # Natural sentence
     if len(phrases) == 1:
         return f"I see {phrases[0]}."
