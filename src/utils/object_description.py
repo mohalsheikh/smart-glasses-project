@@ -26,9 +26,22 @@ IGNORE_LABELS = {
 }
 
 # Merge similar labels
+# Currency labels are normalized so that both front and back variants
+# produce a clean spoken form like "five dollar bill".
 MERGE_LABELS = {
-    "five-dollar-back": "5 dollar bill",
-    "ten-dollar-front": "10 dollar bill",
+    # --- US currency normalization ---
+    "one-dollar-front":     "one dollar bill",
+    "one-dollar-back":      "one dollar bill",
+    "five-dollar-front":    "five dollar bill",
+    "five-dollar-back":     "five dollar bill",
+    "ten-dollar-front":     "ten dollar bill",
+    "ten-dollar-back":      "ten dollar bill",
+    "twenty-dollar-front":  "twenty dollar bill",
+    "twenty-dollar-back":   "twenty dollar bill",
+    "fifty-dollar-front":   "fifty dollar bill",
+    "fifty-dollar-back":    "fifty dollar bill",
+    "hundred-dollar-front": "hundred dollar bill",
+    "hundred-dollar-back":  "hundred dollar bill",
     # "Human face": "person", "Man": "person", "Woman": "person",
     # "Boy": "person", "Girl": "person", "Person": "person",
     # "Laptop computer": "laptop", "Computer keyboard": "keyboard",

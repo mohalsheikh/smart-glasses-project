@@ -14,12 +14,14 @@ from pathlib import Path
 from typing import Optional
 import sounddevice as sd
 from vosk import KaldiRecognizer, Model
+from src.utils.object_description import normalize_label
 
 VOICE_INPUT_ENABLED: bool = True
 
 # Absolute path to your Vosk model folder (must contain am/, conf/, graph/)
 # NOTE: change this to where YOU unzipped the model.
-VOSK_MODEL_PATH: str = r"C:\\Repos\\vosk-model-small-en-us-0.15\\vosk-model-small-en-us-0.15"
+# VOSK_MODEL_PATH: str = r"C:\\Repos\\vosk-model-small-en-us-0.15\\vosk-model-small-en-us-0.15"
+VOSK_MODEL_PATH: str = "vosk-model-small-en-us-0.15"
 
 VOICE_INPUT_TIMEOUT_SECONDS: float = 8.0
 
@@ -44,9 +46,17 @@ class VoiceInput:
         if model_class_names is not None: # if model class names are provided, we want to add them to the command grammar so that Vosk can recognize them in commands.
             cmd_grammar_json = json.loads(command_grammar)
 
-            # Insert class names into command grammar for recognition
+            # Normalize class names before inserting into grammar.
+            # This ensures the user can say "five dollar bill" instead of
+            # "five-dollar-front" or "five-dollar-back".
+            seen_names = set(cmd_grammar_json)  # avoid duplicates
             for _, class_name in model_class_names.items():
-                cmd_grammar_json.insert(-1, class_name)  # Insert before ["unk"]
+                normalized = normalize_label(class_name)
+                if normalized is None:
+                    continue  # skip ignored labels
+                if normalized not in seen_names:
+                    cmd_grammar_json.insert(-1, normalized)  # Insert before ["unk"]
+                    seen_names.add(normalized)
 
             self.command_grammar = json.dumps(cmd_grammar_json)
             print(f"Constructed command grammar with model class names: {self.command_grammar}")

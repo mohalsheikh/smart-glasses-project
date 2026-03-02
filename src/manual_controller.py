@@ -17,7 +17,7 @@ from src.speech_engine import SpeechEngine
 from src.voice_input import VoiceInput
 
 import src.utils.config as config
-from src.utils.object_description import summarize_detections, format_ocr_feedback
+from src.utils.object_description import summarize_detections, format_ocr_feedback, normalize_label
 
 class MainController:
     def __init__(self) -> None:
@@ -26,6 +26,9 @@ class MainController:
         self.camera_frame_width = self.camera.frame_width # frame width from camera handler
 
         self.detector = ObjectDetector(model_name="yolov8n.pt")
+        # To use multiple models, pass model_names instead:
+        # self.detector = ObjectDetector(model_names=["yolov8n.pt", "currency_detector.pt"])
+
         # self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
         self.ocr = OCREngine() # unfinished.
         self.speech = SpeechEngine()
@@ -33,9 +36,18 @@ class MainController:
         class_names_dict = self.detector.classes # this is a map of class ID to class name. these are the objects that our YOLO model(s) know
         self.voice = VoiceInput(model_class_names=class_names_dict) # pass the class names from the object detector to the voice input module so it can recognize them in commands.
 
-        self.class_names = list(class_names_dict.values()) # list of class names from the object detector, used for command recognition in voice input.
+        # Build the list of *normalized* class names used for command matching.
+        # This keeps the controller in sync with the normalized grammar that
+        # VoiceInput now builds (see voice_input.py).
+        normalized_names = set()
+        for name in class_names_dict.values():
+            norm = normalize_label(name)
+            if norm is not None:
+                normalized_names.add(norm)
 
-        # set of all individual words that appear in class names, used for partial matching of class names in voice commands.
+        self.class_names = list(normalized_names)
+
+        # set of all individual words that appear in (normalized) class names, used for partial matching of class names in voice commands.
         self.partial_class_names = {word for name in self.class_names for word in name.split()} 
 
         print("⚡ MANUAL Smart Glasses System Initialized")
