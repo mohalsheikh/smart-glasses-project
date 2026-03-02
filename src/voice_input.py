@@ -23,6 +23,7 @@ VOICE_INPUT_ENABLED: bool = True
 # VOSK_MODEL_PATH: str = r"C:\\Repos\\vosk-model-small-en-us-0.15\\vosk-model-small-en-us-0.15"
 VOSK_MODEL_PATH: str = "vosk-model-small-en-us-0.15"
 
+
 VOICE_INPUT_TIMEOUT_SECONDS: float = 8.0
 
 class VoiceInput:
