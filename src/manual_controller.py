@@ -12,7 +12,7 @@ This module is responsible for:
 from src.camera_handler import CameraHandler
 from src.currency_recognizer import CurrencyRecognizer
 from src.object_detector import ObjectDetector
-from src.ocr_engine import OCREngine
+from src.ocr_engine2 import OCREngine2
 from src.speech_engine import SpeechEngine
 
 import src.utils.config as config
@@ -30,7 +30,7 @@ class MainController:
         self.camera = CameraHandler()
         self.detector = ObjectDetector()
         # self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
-        self.ocr = OCREngine() # unfinished.
+        self.ocr = OCREngine2() # unfinished.
         self.speech = SpeechEngine()
         self.voice = VoiceInput()
 
@@ -126,6 +126,9 @@ class MainController:
                 print("✅ Detection complete.")
 
                 ocr_result = self.ocr.extract_text_with_confidence(frame)
+                # Replace raw OCR with cleaned OCR
+                if ocr_result.get("text_clean"):
+                    ocr_result["text"] = ocr_result["text_clean"]
                 ocr_feedback = format_ocr_feedback(ocr_result)
                 if ocr_result.get("text"):
                     print(ocr_feedback)
