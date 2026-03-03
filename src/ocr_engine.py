@@ -14,9 +14,11 @@ Notes:
 """
 from __future__ import annotations
 from typing import List, Dict, Any
+from src.utils import preprocessing
 import easyocr
 import cv2 as cv # plan to use later for preprocessing..?
 import numpy as np
+
 
 DEFAULT_MIN_CONFIDENCE: float = 0.45
 
@@ -86,7 +88,9 @@ class OCREngine:
     def _extract_text(self, image: np.ndarray) -> List[Dict[str, Any]]:
         # `image` is a NumPy array containing raw pixel data.
         # This array represents the image or object crop being analyzed by EasyOCR.
-        raw = self.easyOCR_reader.readtext(image, detail=1)
+        # Convert BGR (OpenCV default) → RGB (what OCR expects)
+        image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+        raw = self.easyOCR_reader.readtext(image_rgb, detail=1)
         # detail=1: return full details (bbox, text, confidence) for each detection
         results = []
         # x and y coordinate pairs from the bounding box. 
@@ -104,15 +108,28 @@ class OCREngine:
         """
         Extracts all text from image and returns a single readable string.
         Filters by minimum confidence and sorts in reading order (top to bottom, left to right).
+        Tries 4 deskew candidates and returns the best one.
         """
-
-        # TODO preprocessing funcs here
-
-        results = self._extract_text(image)
-        filtered = self._filter_and_sort_results(results, min_conf)
-        if not filtered:
-            return ""
-        return self._join_text(filtered)
+        best_text = ""
+        best_score = -1.0  # higher is better
+        for i, candidate in enumerate(preprocessing.deskew_image(image), start=1):
+            results = self._extract_text(candidate)
+            filtered = self._filter_and_sort_results(results, min_conf)
+            print(f"[OCR] deskew candidate {i}: raw={len(results)} filtered={len(filtered)}")
+            if not filtered:
+                continue
+            # Uses confidence helper to score
+            metrics = self._annotate_confidence(filtered)  # avg_conf, min_conf, count
+            text = self._join_text(filtered)
+            score = metrics["count"] + metrics["avg_conf"]
+            print(f"[OCR] candidate {i} score={score:.3f} text: {text}")
+            if score > best_score:
+                best_score = score
+                best_text = text
+        if best_text:
+            return best_text
+        print("[OCR] no candidates produced filtered text")
+        return ""
 ############################################################################################
     def extract_text_with_confidence(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> Dict[str, Any]:
         """

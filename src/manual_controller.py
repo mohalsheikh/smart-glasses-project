@@ -50,6 +50,7 @@ class MainController:
         # TEST: Per-object OCR attachment
         # =========================================================================================
         try:
+            print()
             print("ℹ️  Per-object OCR attachment results ℹ️")
             print("====================================================")
 
