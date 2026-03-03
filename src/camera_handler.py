@@ -51,6 +51,16 @@ class CameraHandler:
         if not self.cap or not self.cap.isOpened(): # if the video capture object was not created successfully...
             raise RuntimeError(f"Could not open camera {camera_index} with OpenCV.") # error
 
+        # test frame capture to detect if camera is actually usable (catches "in use by another app" scenarios)
+        ret, test_frame = self.cap.read()
+        if not ret or test_frame is None:
+            self.cap.release()
+            raise RuntimeError(
+                f"Camera {camera_index} opened but cannot read frames. "
+                "It may be in use by another application or have driver issues. "
+                "Please check that no other applications are using the camera.\n"
+            )
+
         # setting capture width and height
         self.cap.set(cv.CAP_PROP_FRAME_WIDTH, frame_width)
         self.cap.set(cv.CAP_PROP_FRAME_HEIGHT, frame_height)
@@ -73,6 +83,10 @@ class CameraHandler:
             pass # if destroyAllWindows fails, ignore it
 
     def capture_frame(self):
+        # check if camera is still open before attempting to read
+        if not self.cap.isOpened():
+            return None  # camera connection lost or closed
+        
         ret, frame = self.cap.read() # attempt to read a frame from the camera
 
         if not ret: # if reading the frame failed...

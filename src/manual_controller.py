@@ -93,6 +93,13 @@ class MainController:
         # frame variable used to hold the current frame from the camera.
         # initially showing the first frame of the camera to open the window.
         frame = self.camera.capture_and_show_frame()
+        
+        # validate that initial frame capture succeeded
+        if frame is None:
+            print("❌ Failed to capture initial frame from camera.")
+            self.speech.speak("Camera initialization failed. Please check device.")
+            return
+        
         annotated_frame = frame.copy() if frame is not None else None
 
         while True: # main loop
@@ -106,7 +113,10 @@ class MainController:
                 frame = self.camera.capture_frame() 
 
                 if frame is None:
-                    print("⚠️ No frame from camera.")
+                    print("⚠️ Camera may be unavailable - could not capture frame.")
+                    self.speech.speak("Camera may be unavailable. Please check device and try again.")
+                    continue  # skip to next wake word instead of processing None frame
+                
                 # This matches the behavior you asked for (capture first, then ask the question).
                 print('\n🎙️ Listening...')
 
