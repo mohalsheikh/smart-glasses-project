@@ -138,6 +138,14 @@ class MainController:
                 cleaned_transcript = self._remove_unk(transcript)
                 print(f"🎙️ Cleaned transcript: {cleaned_transcript}")
 
+                # CANCEL COMMANDS
+                quit_phrases = ("sleep", "end", "nevermind", "thanks")
+
+                if any(q in cleaned_transcript for q in quit_phrases):
+                    self.speech.speak("Wow, okay bro. I'm going to sleep then.")
+                    print("🛑 Vision system entered sleep mode.")
+                    continue   # just go back to wake word listening
+
                 # if after cleaning the transcript is empty, that means we didn't recognize any valid command words, so we should continue...
                 if not cleaned_transcript:
                     print("🎙️ Command not recognized. Try again.")

@@ -31,7 +31,7 @@ class VoiceInput:
         target_rate: int = 16000,
         block_size: int = 8000,
         wake_word_grammar: str = '["vision", "[unk]"]',
-        command_grammar: str = '["detect", "read", "[unk]"]',
+        command_grammar: str = '["detect", "read", "sleep", "end", "nevermind", "thanks", "[unk]"]',
         model_class_names: dict[int, str] | None = None 
     ) -> None:
         
