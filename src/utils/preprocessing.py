@@ -109,25 +109,29 @@ def deskew_image(image):
         center = (width // 2, height // 2)
 
         rotation_matrix = cv.getRotationMatrix2D(center, angle, 1.0)
+        print(f"Deskewing image with angle: {angle:.2f} degrees")
         image1 = cv.warpAffine(image, rotation_matrix, (width, height))
 
         yield image1
 
         # attempt "second best" rotation if we enter into this function again
-        angle2 = angle - 90 if angle <= 0 else angle + 90
+        angle2 = angle + 90 if angle <= 0 else angle - 90
         rotation_matrix = cv.getRotationMatrix2D(center, angle2, 1.0)
+        print(f"Attempting second deskew with angle: {angle2:.2f} degrees")
         image2 = cv.warpAffine(image, rotation_matrix, (width, height))
 
         yield image2
 
         # "third best" rotation is best rotation + 180 degrees.
         rotation_matrix = cv.getRotationMatrix2D(center, angle + 180, 1.0)
+        print(f"Attempting third deskew with angle: {(angle + 180) % 360:.2f} degrees")
         image3 = cv.warpAffine(image, rotation_matrix, (width, height))
 
         yield image3
 
-        # "worst" rotation is second best + 180 degrees.
+        # "fourth best" rotation is second best + 180 degrees.
         rotation_matrix = cv.getRotationMatrix2D(center, angle2 + 180, 1.0)
+        print(f"Attempting fourth deskew with angle: {(angle2 + 180) % 360:.2f} degrees")
         image4 = cv.warpAffine(image, rotation_matrix, (width, height))
 
         yield image4
