@@ -7,7 +7,7 @@ import src.utils.config as config
 import inflect
 
 _inflect = inflect.engine()
-MAX_SPEECH_ITEMS: int = 5
+MAX_SPEECH_ITEMS: int = 20
 
 # Small objects that need lower confidence
 SMALL_OBJECTS: set = {
@@ -149,7 +149,7 @@ def _format_detections(
     max_items: int = MAX_SPEECH_ITEMS,
 ) -> List[Dict[str, Optional[str]]] | None:
     """
-    Formats detections into a list of dicts with label and direction, which is to be used for summarization.
+    Formats detections into a list of dicts with label, direction, and ocr_text if it is present, which is to be used for summarization.
     """
     # Filter by adaptive confidence
     filtered = []
@@ -170,6 +170,7 @@ def _format_detections(
                 "label": normalized_label,
                 "confidence": conf,
                 "center": d.get("center"),
+                "ocr_text": d.get("ocr_text"),
             })
 
     if len(filtered) == 0:
@@ -187,7 +188,8 @@ def _format_detections(
     filtered = [
         {
             "label": d["label"],
-            "direction": direction_from_center(d["center"], frame_width)
+            "direction": direction_from_center(d["center"], frame_width),
+            "ocr_text": d.get("ocr_text")
         }
         for d in filtered
     ]
@@ -197,27 +199,35 @@ def _format_detections(
 def _construct_description(filtered_detections: List[Dict[str, Optional[str]]]) -> str:
     """Constructs a natural language description from the filtered detections.
     
-    Groups detections by (label, direction) to eliminate redundancy.
+    Groups detections by (label, direction, ocr_text) to eliminate redundancy.
     Example: two identical labels+directions become "two people in front of you".
+    Another example: two identical labels+ocr_text+directions become "two stop signs that say STOP in front of you".
     """
-    # Group by (label, direction) to count duplicates
+    # Group by (label, direction, ocr_text) to count duplicates
     groups = {}
     for d in filtered_detections:
         label = d["label"]
         direction = d["direction"]
-        key = (label, direction)
+        ocr_text = d.get("ocr_text")
+        key = (label, direction, ocr_text)
         groups[key] = groups.get(key, 0) + 1
     
     phrases = []
-    for (label, direction), count in groups.items():
+    for (label, direction, ocr_text), count in groups.items():
         # Build phrase based on count
         if count == 1:
             label_phrase = add_indefinite_article(label)
+            verb_phrase = "that says" # singular verb phrase to match singular label_phrase, to create sentences like "a stop sign that says STOP in front of you"
         else:
             # Convert to plural: "two people", "three bottles", etc.
             plural_label = pluralize(label, count)
             count_word = _inflect.number_to_words(count)
             label_phrase = f"{count_word} {plural_label}"
+            verb_phrase = "that say" # plural verb phrase to match plural label_phrase, to create sentences like "two stop signs that say STOP in front of you"
+
+        # Add OCR text to phrase if it exists, naturally handling singular vs plural w/ "that says" vs "that say" from verb_phrase.
+        if ocr_text is not None:
+            label_phrase = f'{label_phrase} {verb_phrase} {ocr_text}'
         
         # Add direction
         match direction:

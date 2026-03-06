@@ -87,7 +87,6 @@ class MainController:
                     self.voice_input_result_q.put((VoiceInputState.WAITING_FOR_COMMAND, command_input)) # put the command input in the queue for the main thread to process
                     
 
-
     def _start_worker_threads(self):
         tts_thread = threading.Thread(target=self._tts_worker, name="TTSThread", daemon=True)
         voice_input_thread = threading.Thread(target=self._voice_input_worker, name="VoiceInputThread", daemon=True)
