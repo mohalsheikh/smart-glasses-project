@@ -43,6 +43,7 @@ class VoiceInput:
         
         if model_class_names is not None: # if model class names are provided, we want to add them to the command grammar so that Vosk can recognize them in commands.
             cmd_grammar_json = json.loads(command_grammar)
+            self.commands = cmd_grammar_json[:-1] # get the command grammar as a list, excluding the last element which is [unk]
 
             # Insert class names into command grammar for recognition
             for _, class_name in model_class_names.items():
