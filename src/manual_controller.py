@@ -97,16 +97,16 @@ class MainController:
     # determines action to take based on the value of command, and returns a natural language description of the result to be spoken to the user.
     # objs is the list of objects that we want to process. If it is none, we are processing all objects that the ObjectDetector knows.
     def _route_command(self, command: str, cleaned_transcript: str, frame, objs: list[str] = None) -> str:
-        annotated_frame = None
+        final_frame = None
         match command:
 ##############################################################################################################
 # # Action commands
 ##############################################################################################################  
             case "detect":
-                detections, annotated_frame = self.detector.detect(frame, annotate=True, objects=objs) # detect objects and get annotated frame
+                detections, final_frame = self.detector.detect(frame, annotate=True, objects=objs) # detect objects and get annotated frame
                 description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections in natural language
             case "read": 
-                detections, annotated_frame = self.detector.detect(frame, annotate=True, objects=objs) # detect objects and get annotated frame
+                detections, final_frame = self.detector.detect(frame, annotate=True, objects=objs) # detect objects and get annotated frame
                 detections = self.ocr.attach_crop_text_to_detected_objects(frame, detections) # read text on objects
 
                 self._print_ocr_feedback(detections)
@@ -118,6 +118,7 @@ class MainController:
 ##############################################################################################################       
             case "sleep" | "end" | "nevermind" | "thanks":
                 description = "Wow, okay bro. I'm going to sleep then."
+                final_frame = frame.copy() if frame is not None else None
                 print("🛑 Vision system entered sleep mode.")
 ##############################################################################################################
 # # Default
@@ -134,12 +135,12 @@ class MainController:
 
                 command = transcript_after_command.split()[0]
                 if command in self.commands: 
-                    description, annotated_frame = self._route_command(command, cleaned_transcript, frame, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
+                    description, final_frame = self._route_command(command, cleaned_transcript, frame, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
                 else:
                     description = f"Sorry, I didn't understand the command. I heard '{cleaned_transcript}'."
-                    annotated_frame = frame.copy() if frame is not None else None
+                    final_frame = frame.copy() if frame is not None else None
 
-        return description, annotated_frame
+        return description, final_frame
 
     # helper to clean up Vosk's unknown token from results.
     # We replace it with empty string and then strip whitespace. "[unk]" becomes "", something like "detect [unk]" becomes "detect". 
