@@ -3,7 +3,6 @@
 VisionAssist Competition Demo Mode
 ====================================
 Streamlined demo launcher for the CBU Business Competition.
-
 Runs with just a camera (laptop webcam or Pi Camera) - no sensors needed.
 Shows: Object Detection, Scene Description, Currency Recognition, 
        OCR/Reading, Voice Commands, and Sign Language.
@@ -23,9 +22,13 @@ Controls:
   t - Quick time check
   w - Weather info
   q - Quit
-
   SPACE - Toggle auto-narration
   h - Show/hide help overlay
+
+ESP32 Button (single BOOT button):
+  Short press  → Voice command
+  Double press → Describe scene
+  Long press   → Read text
 """
 
 from __future__ import annotations
@@ -67,6 +70,11 @@ try:
 except Exception:
     VoiceListener = None
 
+try:
+    from esp32_listener import ESP32ButtonListener
+except ImportError:
+    ESP32ButtonListener = None
+
 import src.utils.config as config
 from collections import deque
 from typing import List, Dict, Any, Optional
@@ -76,7 +84,6 @@ import threading
 # ============================================================================
 # DEMO OVERLAY - Makes the demo look professional
 # ============================================================================
-
 class DemoOverlay:
     """Renders a professional HUD overlay on the demo feed."""
 
@@ -174,6 +181,8 @@ class DemoOverlay:
             ("SPACE - Toggle auto-narrate", (0, 200, 255)),
             ("H  - Toggle this help", (150, 150, 150)),
             ("Q  - Quit", (100, 100, 255)),
+            ("", (0, 0, 0)),
+            ("ESP32: tap=voice  2x=describe  hold=read", (255, 200, 100)),
         ]
 
         for i, (text, color) in enumerate(commands):
@@ -189,7 +198,6 @@ class DemoOverlay:
 # ============================================================================
 # DEMO CONTROLLER
 # ============================================================================
-
 class DemoController:
     """Streamlined controller for competition demos."""
 
@@ -209,7 +217,6 @@ class DemoController:
         self.doc_reader = DocumentReader(self.ocr)
         self.weather_client = WeatherClient()
         self.navigation_client = NavigationClient()
-
         self.assistant = AssistantBrain(
             scene_ai=self.scene_ai,
             weather_client=self.weather_client,
@@ -227,10 +234,24 @@ class DemoController:
         self.overlay = DemoOverlay()
         self.last_detections: List[Dict[str, Any]] = []
         self.last_annotated = None
+        self.last_frame = None
         self._tts_lock = threading.Lock()
         self._busy = False
-
         self.last_auto_narrate_time = 0.0
+
+        # ESP32 button controller
+        self.esp32 = None
+        if ESP32ButtonListener:
+            try:
+                self.esp32 = ESP32ButtonListener(
+                    on_voice=lambda: self._do_voice(self.last_frame) if self.last_frame is not None else None,
+                    on_describe=lambda: self._do_describe(self.last_frame) if self.last_frame is not None else None,
+                    on_read=lambda: self._do_read(self.last_frame) if self.last_frame is not None else None,
+                )
+                self.esp32.start()
+                print("🎮 ESP32 button controller: CONNECTED")
+            except Exception as e:
+                print(f"⚠️ ESP32 listener not available: {e}")
 
         print()
         print("🎮 Press 'H' for controls | Press 'D' to describe scene")
@@ -267,7 +288,6 @@ class DemoController:
     # ------------------------------------------------------------------
     # Demo Actions
     # ------------------------------------------------------------------
-
     def _do_describe(self, frame):
         """AI scene description."""
         def task():
@@ -277,7 +297,6 @@ class DemoController:
                 detections=self.last_detections,
             )
             self._speak(answer)
-
         self._async_task(task, "Describing scene...", (0, 255, 0))
 
     def _do_currency(self, frame):
@@ -285,7 +304,6 @@ class DemoController:
         def task():
             result = self.currency.recognize(frame)
             self._speak(result)
-
         self._async_task(task, "Checking currency...", (0, 200, 255))
 
     def _do_read(self, frame):
@@ -293,7 +311,6 @@ class DemoController:
         def task():
             msg = self.doc_reader.start(frame, mode="hybrid")
             self._speak(msg)
-
         self._async_task(task, "Reading text...", (255, 100, 255))
 
     def _do_people(self, frame):
@@ -305,7 +322,6 @@ class DemoController:
                 detections=self.last_detections,
             )
             self._speak(answer)
-
         self._async_task(task, "Analyzing people...", (255, 200, 0))
 
     def _do_find_object(self, frame):
@@ -317,7 +333,6 @@ class DemoController:
                 detections=self.last_detections,
             )
             self._speak(answer)
-
         self._async_task(task, "Finding objects...", (255, 255, 100))
 
     def _do_voice(self, frame):
@@ -333,13 +348,13 @@ class DemoController:
 
             # Wait for speech to fully stop (so mic doesn't pick up TTS)
             time.sleep(0.3)
-
             self.overlay.set_status("Listening...", (100, 255, 255))
 
             # Audio feedback: print to console (no speaker cue — mic picks it up)
             print("🎤 Listening for voice command...")
 
             text = self.voice_listener.listen_and_transcribe()
+
             if not text:
                 self._speak("I didn't catch that. Press V and try again.")
                 return
@@ -373,7 +388,6 @@ class DemoController:
             now = datetime.datetime.now()
             time_str = now.strftime("%-I:%M %p")
             self._speak(f"It's {time_str}.")
-
         self._async_task(task, "Checking time...")
 
     def _do_weather(self):
@@ -385,13 +399,11 @@ class DemoController:
                 detections=[],
             )
             self._speak(answer)
-
         self._async_task(task, "Getting weather...", (200, 200, 200))
 
     # ------------------------------------------------------------------
     # Main Loop
     # ------------------------------------------------------------------
-
     def run(self):
         """Main demo loop."""
         frame_idx = 0
@@ -406,6 +418,9 @@ class DemoController:
                 if frame is None:
                     print("⚠️ No frame from camera.")
                     break
+
+                # Store latest frame for ESP32 button callbacks
+                self.last_frame = frame.copy()
 
                 fps = self.overlay.update_fps()
                 frame_height, frame_width = frame.shape[:2]
@@ -471,6 +486,12 @@ class DemoController:
         except KeyboardInterrupt:
             print("🛑 Interrupted.")
         finally:
+            # Clean up ESP32 listener
+            if self.esp32:
+                try:
+                    self.esp32.stop()
+                except Exception:
+                    pass
             try:
                 self.camera.release()
             except Exception:
@@ -482,7 +503,6 @@ class DemoController:
 # ============================================================================
 # Entry Point
 # ============================================================================
-
 def main():
     parser = argparse.ArgumentParser(description="VisionAssist Competition Demo")
     parser.add_argument("--webcam", type=int, default=0, help="Camera index (default: 0)")
