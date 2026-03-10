@@ -6,7 +6,7 @@ without changing the rest of the code.
 """
 
 from __future__ import annotations
-
+import os
 import json
 import queue
 import time
@@ -19,7 +19,7 @@ VOICE_INPUT_ENABLED: bool = True
 
 # Absolute path to your Vosk model folder (must contain am/, conf/, graph/)
 # NOTE: change this to where YOU unzipped the model.
-VOSK_MODEL_PATH: str = r"C:\\Repos\\vosk-model-small-en-us-0.15\\vosk-model-small-en-us-0.15"
+VOSK_MODEL_PATH: str = os.environ.get("VOSK_MODEL_PATH", os.path.expanduser("~/smart-glasses-project/vosk-model-small-en-us-0.15"))
 
 VOICE_INPUT_TIMEOUT_SECONDS: float = 8.0
 
