@@ -1,9 +1,15 @@
 """
-Handles camera input and preprocessing
+Handles camera input and preprocessing.
+Supports both OpenCV (laptop/macOS) and rpicam-still subprocess (Raspberry Pi with libcamera).
 """
-
 import cv2 as cv
+import numpy as np
+import platform
+import subprocess
+import tempfile
+import os
 import src.utils.config as config
+
 
 class CameraHandler:
     def __init__(
@@ -12,77 +18,99 @@ class CameraHandler:
             frame_width: int = config.DEFAULT_FRAME_WIDTH,
             frame_height: int = config.DEFAULT_FRAME_HEIGHT
             ):
-        
-        # parameters cannot be None and must be of the types specified in the function signature.
-        # Our camera index must be a non-negative integer.
-        # Our frame width and height must be positive integers.
-        # the ifs below ensure that the parameters are valid by raising an error if they aren't.
 
-        # error if camera index is not provided
         if camera_index is None:
             raise ValueError("camera_index must be set.")
-
-        # error if camera index is not a non-negative integer
         if camera_index < 0:
             raise ValueError("camera_index must be a non-negative integer.")
-        
-        # error if frame width is not provided
         if frame_width is None:
             raise ValueError("frame_width must be set.")
-        
-        # error if frame width is not a positive integer
         if frame_width <= 0:
             raise ValueError("frame_width must be a positive integer.")
-        
-        # error if frame height is not provided
         if frame_height is None:
             raise ValueError("frame_height must be set.")
-        
-        # error if frame height is not a positive integer
         if frame_height <= 0:
             raise ValueError("frame_height must be a positive integer.")
 
-        # initializing video capture object. this should open the camera whose index is specified in config
+        self.frame_width = frame_width
+        self.frame_height = frame_height
+        self.use_rpicam = False
+        self.cap = None
+        self._tmp_path = os.path.join(tempfile.gettempdir(), "visionassist_frame.jpg")
+
+        # Try rpicam-still on Linux (Raspberry Pi)
+        if platform.system() == "Linux":
+            try:
+                result = subprocess.run(
+                    ["rpicam-still", "--list-cameras"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0 and "imx" in result.stdout.lower():
+                    self.use_rpicam = True
+                    print(f"[CameraHandler] Using rpicam-still (libcamera)")
+                    return
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                print("[CameraHandler] rpicam-still not available, falling back to OpenCV...")
+
+        # Fallback to OpenCV
         self.cap = cv.VideoCapture(camera_index)
-
-        if not self.cap or not self.cap.isOpened(): # if the video capture object was not created successfully...
-            raise RuntimeError(f"Could not open camera {camera_index} with OpenCV.") # error
-
-        # setting capture width and height
+        if not self.cap or not self.cap.isOpened():
+            raise RuntimeError(f"Could not open camera {camera_index} with OpenCV.")
         self.cap.set(cv.CAP_PROP_FRAME_WIDTH, frame_width)
         self.cap.set(cv.CAP_PROP_FRAME_HEIGHT, frame_height)
+        print(f"[CameraHandler] Using OpenCV VideoCapture (index {camera_index})")
 
-    # attempts to free camera when the object is deleted.
-    # Note: Window cleanup is handled by the controller
     def __del__(self):
-        # free camera
-        try:
-            if hasattr(self, 'cap') and self.cap is not None:
-                self.cap.release()
-        except Exception:
-            pass # if release fails, ignore it
-    
+        self.release()
+
     def release(self):
         """Explicitly release camera resources"""
         try:
-            if hasattr(self, 'cap') and self.cap is not None:
+            if self.cap is not None:
                 self.cap.release()
+                self.cap = None
+        except Exception:
+            pass
+        # Clean up temp file
+        try:
+            if os.path.exists(self._tmp_path):
+                os.remove(self._tmp_path)
         except Exception:
             pass
 
     def capture_frame(self):
-        ret, frame = self.cap.read() # attempt to read a frame from the camera
+        if self.use_rpicam:
+            try:
+                subprocess.run(
+                    [
+                        "rpicam-still",
+                        "-o", self._tmp_path,
+                        "--width", str(self.frame_width),
+                        "--height", str(self.frame_height),
+                        "--nopreview",
+                        "--immediate",
+                        "-t", "1",
+                    ],
+                    capture_output=True,
+                    timeout=10
+                )
+                if os.path.exists(self._tmp_path):
+                    frame = cv.imread(self._tmp_path)
+                    return frame
+            except (subprocess.TimeoutExpired, Exception) as e:
+                print(f"[CameraHandler] rpicam-still capture failed: {e}")
+                return None
+        elif self.cap is not None:
+            ret, frame = self.cap.read()
+            if not ret:
+                return None
+            return frame
+        return None
 
-        if not ret: # if reading the frame failed...
-            return None # return None.
-        
-        return frame # return the captured frame
-    
     def show_image(self, image, window_name="Camera"):
-        cv.imshow(window_name, image) # show the provided frame in a window with the specified name
+        cv.imshow(window_name, image)
 
     def capture_and_show_frame(self, window_name="Camera"):
-        frame = self.capture_frame() # call capture_frame to get a frame from the camera.
-
-        if frame is not None: # if capturing the frame was successful...
-            self.show_image(frame, window_name) # show the captured frame in a window with the specified name
+        frame = self.capture_frame()
+        if frame is not None:
+            self.show_image(frame, window_name)
