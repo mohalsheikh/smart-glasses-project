@@ -206,12 +206,12 @@ class MainController:
     def run(self) -> None:    
         # frame variable used to hold the current frame from the camera.
         # initially showing the first frame of the camera to open the window.
-        frame = self.camera.capture_and_show_frame()
+        frame = self.camera.capture_and_show_frame("Live Camera Feed")
         
         # validate that initial frame capture succeeded
         if frame is None:
             print("❌ Failed to capture initial frame from camera.")
-            self.speech.speak("Camera initialization failed. Please check device.")
+            # self.speech.speak("Camera initialization failed. Please check device.")
             return
         
         annotated_frame = frame.copy() if frame is not None else None
@@ -219,7 +219,10 @@ class MainController:
         self._start_worker_threads() # start the display and speech worker threads
 
         while True: # main loop
-            self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.
+
+            self.camera.capture_and_show_frame(window_name="Live Camera Feed") # keep showing the camera feed for our own convenience
+            self.camera.show_image(annotated_frame, window_name="Detections") # just keep showing the last detections frame so that the window doesn't say not responding.
+
             if self.camera.wait_key_press('q', delay=10): # if the user presses 'q', we quit the program.
                 print("Exiting program.")
                 break
