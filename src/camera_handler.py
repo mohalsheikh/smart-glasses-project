@@ -95,6 +95,9 @@ class CameraHandler:
         return frame # otherwise, return the captured frame
     
     def show_image(self, image, window_name="Camera"):
+        if image is None: # if the provided image is None we want to error.
+            raise ValueError(f"Attempted to show None in window '{window_name}'.")
+        
         cv.imshow(window_name, image) # show the provided frame in a window with the specified name
 
     def capture_and_show_frame(self, window_name="Camera"):
