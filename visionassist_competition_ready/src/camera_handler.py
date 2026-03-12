@@ -32,13 +32,13 @@ class CameraHandler:
         if frame_height <= 0:
             raise ValueError("frame_height must be a positive integer.")
 
-        self.frame_width = frame_width
-        self.frame_height = frame_height
+        self._frame_width = frame_width
+        self._frame_height = frame_height
         self.use_rpicam = False
         self.cap = None
         self._tmp_path = os.path.join(tempfile.gettempdir(), "visionassist_frame.jpg")
 
-        # Try rpicam-still on Linux (Raspberry Pi)
+        # Try rpicam-still on Linux (Raspberry Pi with libcamera)
         if platform.system() == "Linux":
             try:
                 result = subprocess.run(
@@ -50,7 +50,7 @@ class CameraHandler:
                     print(f"[CameraHandler] Using rpicam-still (libcamera)")
                     return
             except (FileNotFoundError, subprocess.TimeoutExpired):
-                print("[CameraHandler] rpicam-still not available, falling back to OpenCV...")
+                pass
 
         # Fallback to OpenCV
         self.cap = cv.VideoCapture(camera_index)
@@ -64,14 +64,12 @@ class CameraHandler:
         self.release()
 
     def release(self):
-        """Explicitly release camera resources"""
         try:
             if self.cap is not None:
                 self.cap.release()
                 self.cap = None
         except Exception:
             pass
-        # Clean up temp file
         try:
             if os.path.exists(self._tmp_path):
                 os.remove(self._tmp_path)
@@ -85,8 +83,8 @@ class CameraHandler:
                     [
                         "rpicam-still",
                         "-o", self._tmp_path,
-                        "--width", str(self.frame_width),
-                        "--height", str(self.frame_height),
+                        "--width", str(self._frame_width),
+                        "--height", str(self._frame_height),
                         "--nopreview",
                         "--immediate",
                         "-t", "1",
@@ -101,6 +99,8 @@ class CameraHandler:
                 print(f"[CameraHandler] rpicam-still capture failed: {e}")
                 return None
         elif self.cap is not None:
+            if not self.cap.isOpened():
+                return None
             ret, frame = self.cap.read()
             if not ret:
                 return None
@@ -114,3 +114,4 @@ class CameraHandler:
         frame = self.capture_frame()
         if frame is not None:
             self.show_image(frame, window_name)
+        return frame

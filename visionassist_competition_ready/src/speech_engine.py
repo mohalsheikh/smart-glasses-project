@@ -5,7 +5,7 @@ Speech Engine with Interrupt Support
 
 Cross-platform TTS:
 - macOS: 'say' command (high quality)
-- Linux/Pi: espeak-ng -> espeak -> piper -> festival (auto-detect)
+- Linux/Pi: Piper (neural, natural voice) -> espeak-ng (fallback)
 - Windows: pyttsx3
 - Fallback: console print
 
@@ -27,13 +27,31 @@ import time
 import threading
 import os
 import signal
+import tempfile
 from queue import Queue, Empty
 from typing import Optional
 
 
+def _find_piper_model() -> Optional[str]:
+    """Find a downloaded Piper voice model."""
+    search_paths = [
+        os.path.expanduser("~/piper-voices"),
+        os.path.expanduser("~/.local/share/piper-voices"),
+        "/usr/share/piper-voices",
+        os.path.join(os.path.dirname(__file__), "..", "piper-voices"),
+    ]
+    for base in search_paths:
+        if os.path.isdir(base):
+            for root, dirs, files in os.walk(base):
+                for f in files:
+                    if f.endswith(".onnx") and not f.endswith(".json"):
+                        return os.path.join(root, f)
+    return None
+
+
 def _find_linux_tts() -> Optional[str]:
     """Detect available TTS engine on Linux."""
-    for cmd in ["espeak-ng", "espeak", "piper", "festival"]:
+    for cmd in ["espeak-ng", "espeak", "festival"]:
         if shutil.which(cmd):
             return cmd
     return None
@@ -42,7 +60,11 @@ def _find_linux_tts() -> Optional[str]:
 class SpeechEngine:
     """
     Text-to-speech wrapper with interrupt support.
-    
+
+    Priority on Linux:
+      1. Piper TTS (neural, natural sounding)
+      2. espeak-ng (robotic fallback)
+
     Key feature: interrupt() method stops ANY current speech immediately,
     useful when user presses a key to speak.
     """
@@ -51,16 +73,31 @@ class SpeechEngine:
         self.debug = debug
         self._platform = platform.system().lower()
         self._linux_tts: Optional[str] = None
+        self._use_piper = False
+        self._piper_model: Optional[str] = None
+        self._piper_cmd: Optional[str] = None
 
         # Detect TTS backend
         if "darwin" in self._platform:
             backend = "macOS 'say'"
         elif "linux" in self._platform:
-            self._linux_tts = _find_linux_tts()
-            if self._linux_tts:
-                backend = f"Linux '{self._linux_tts}'"
+            # Try Piper first (much better quality)
+            piper_cmd = shutil.which("piper") or shutil.which("piper-tts")
+            piper_model = os.environ.get("PIPER_VOICE_MODEL", "") or _find_piper_model()
+
+            if piper_cmd and piper_model and os.path.isfile(piper_model):
+                self._use_piper = True
+                self._piper_cmd = piper_cmd
+                self._piper_model = piper_model
+                model_name = os.path.basename(piper_model)
+                backend = f"Piper TTS (neural voice: {model_name})"
             else:
-                backend = "console print (install espeak-ng for voice: sudo apt install espeak-ng)"
+                # Fallback to espeak
+                self._linux_tts = _find_linux_tts()
+                if self._linux_tts:
+                    backend = f"Linux '{self._linux_tts}' (install Piper for better voice)"
+                else:
+                    backend = "console print (install espeak-ng for voice: sudo apt install espeak-ng)"
         elif "windows" in self._platform:
             backend = "Windows (pyttsx3 if available)"
         else:
@@ -79,7 +116,7 @@ class SpeechEngine:
         self._last_spoken_text: str = ""
         self._last_spoken_time: float = 0.0
         self._dedupe_window = max(0.0, float(dedupe_window_seconds))
-        
+
         # Track if we're currently speaking
         self._is_speaking = False
 
@@ -118,17 +155,17 @@ class SpeechEngine:
         """
         # Clear pending queue first
         self.clear_queue()
-        
+
         # Set interrupt flag
         self._interrupt_event.set()
-        
+
         # Kill current speech process
         with self._process_lock:
             if self._current_process is not None:
                 try:
                     if self.debug:
                         print("🔇 [SpeechEngine] Interrupting speech...")
-                    
+
                     # Terminate the process
                     self._current_process.terminate()
                     try:
@@ -139,24 +176,25 @@ class SpeechEngine:
                     # On macOS, also kill any lingering 'say' processes
                     if "darwin" in self._platform:
                         try:
-                            subprocess.run(["pkill", "-9", "say"], 
+                            subprocess.run(["pkill", "-9", "say"],
                                          capture_output=True, timeout=0.5)
                         except Exception:
                             pass
-                    
-                    # On Linux, kill any lingering TTS processes
-                    if "linux" in self._platform and self._linux_tts:
-                        try:
-                            subprocess.run(["pkill", "-9", self._linux_tts],
-                                         capture_output=True, timeout=0.5)
-                        except Exception:
-                            pass
-                    
+
+                    # On Linux, kill any lingering TTS/aplay processes
+                    if "linux" in self._platform:
+                        for proc_name in ["aplay", "piper", "espeak-ng", "espeak"]:
+                            try:
+                                subprocess.run(["pkill", "-9", proc_name],
+                                             capture_output=True, timeout=0.5)
+                            except Exception:
+                                pass
+
                     self._current_process = None
                 except Exception as e:
                     if self.debug:
                         print(f"⚠️ [SpeechEngine] Interrupt error: {e}")
-        
+
         # Clear the interrupt flag after a moment
         time.sleep(0.1)
         self._interrupt_event.clear()
@@ -170,7 +208,6 @@ class SpeechEngine:
         """Play a short audio cue to indicate the system is listening."""
         if "darwin" in self._platform:
             try:
-                # Use macOS 'say' with a very short word at high speed
                 subprocess.Popen(
                     ["say", "-r", "300", "hmm"],
                     stdout=subprocess.DEVNULL,
@@ -178,15 +215,18 @@ class SpeechEngine:
                 ).wait(timeout=1.0)
             except Exception:
                 pass
-        elif "linux" in self._platform and self._linux_tts:
-            try:
-                subprocess.Popen(
-                    [self._linux_tts, "-s", "300", "hmm"],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                ).wait(timeout=1.0)
-            except Exception:
-                pass
+        elif "linux" in self._platform:
+            if self._use_piper:
+                self._speak_piper("ready")
+            elif self._linux_tts:
+                try:
+                    subprocess.Popen(
+                        [self._linux_tts, "-s", "300", "hmm"],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    ).wait(timeout=1.0)
+                except Exception:
+                    pass
 
     def stop(self) -> None:
         """Stop the worker thread completely."""
@@ -200,8 +240,57 @@ class SpeechEngine:
 
     # ------------------------------------------------------------------
 
+    def _speak_piper(self, text: str) -> None:
+        """
+        Speak using Piper TTS.
+        Outputs to a temp WAV file first, then plays with aplay.
+        This prevents audio cutoff on Bluetooth speakers.
+        """
+        try:
+            tmp_wav = os.path.join(tempfile.gettempdir(), "visionassist_tts.wav")
+
+            # Step 1: Generate WAV file
+            subprocess.run(
+                [self._piper_cmd, "--model", self._piper_model, "--length-scale", "1.3", "--output_file", tmp_wav],
+                input=text.encode(),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+            )
+
+            if self._interrupt_event.is_set():
+                return
+
+            # Step 2: Play the WAV file
+            if os.path.exists(tmp_wav):
+                with self._process_lock:
+                    self._current_process = subprocess.Popen(
+                        ["aplay", "-q", tmp_wav],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+
+                while self._current_process and self._current_process.poll() is None:
+                    if self._interrupt_event.is_set():
+                        break
+                    time.sleep(0.05)
+
+                with self._process_lock:
+                    self._current_process = None
+
+                try:
+                    os.remove(tmp_wav)
+                except Exception:
+                    pass
+
+        except Exception as e:
+            if self.debug:
+                print(f"⚠️ [SpeechEngine] Piper TTS error: {e}")
+            with self._process_lock:
+                self._current_process = None
+
     def _build_tts_command(self, text: str) -> list:
-        """Build the platform-specific TTS command."""
+        """Build the platform-specific TTS command (non-Piper)."""
         if "darwin" in self._platform:
             return ["say", text]
 
@@ -209,9 +298,6 @@ class SpeechEngine:
             if self._linux_tts in ("espeak-ng", "espeak"):
                 # -s 160 = speed, -p 50 = pitch (natural sounding)
                 return [self._linux_tts, "-s", "160", "-p", "50", text]
-            elif self._linux_tts == "piper":
-                # piper reads from stdin
-                return ["piper", "--output-raw"]
             elif self._linux_tts == "festival":
                 return ["festival", "--tts"]
 
@@ -246,61 +332,55 @@ class SpeechEngine:
             self._last_spoken_time = time.time()
             self._is_speaking = True
 
-            cmd = self._build_tts_command(text)
-
-            if cmd:
-                try:
-                    if self._linux_tts == "festival":
-                        # festival reads from stdin
-                        with self._process_lock:
-                            self._current_process = subprocess.Popen(
-                                cmd,
-                                stdin=subprocess.PIPE,
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL,
-                            )
-                        self._current_process.communicate(input=text.encode(), timeout=30)
-                    elif self._linux_tts == "piper":
-                        # piper reads from stdin, outputs raw audio
-                        with self._process_lock:
-                            self._current_process = subprocess.Popen(
-                                cmd,
-                                stdin=subprocess.PIPE,
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL,
-                            )
-                        self._current_process.communicate(input=text.encode(), timeout=30)
-                    else:
-                        # macOS 'say' or espeak: text is part of the command
-                        with self._process_lock:
-                            self._current_process = subprocess.Popen(
-                                cmd,
-                                stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL,
-                            )
-                        
-                        # Wait for completion or interrupt
-                        while self._current_process.poll() is None:
-                            if self._interrupt_event.is_set():
-                                break
-                            time.sleep(0.05)
-
-                    with self._process_lock:
-                        self._current_process = None
-
-                except subprocess.TimeoutExpired:
-                    with self._process_lock:
-                        if self._current_process:
-                            self._current_process.kill()
-                            self._current_process = None
-                except Exception as e:
-                    print(f"⚠️ SpeechEngine TTS failed: {e!r}")
-                    print(f"[TTS] {text}")
+            # Use Piper if available (much better quality)
+            if self._use_piper:
+                self._speak_piper(text)
             else:
-                # No TTS available — print to console
-                print(f"[TTS] {text}")
+                cmd = self._build_tts_command(text)
+
+                if cmd:
+                    try:
+                        if self._linux_tts == "festival":
+                            # festival reads from stdin
+                            with self._process_lock:
+                                self._current_process = subprocess.Popen(
+                                    cmd,
+                                    stdin=subprocess.PIPE,
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL,
+                                )
+                            self._current_process.communicate(input=text.encode(), timeout=30)
+                        else:
+                            # macOS 'say' or espeak: text is part of the command
+                            with self._process_lock:
+                                self._current_process = subprocess.Popen(
+                                    cmd,
+                                    stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL,
+                                )
+
+                            # Wait for completion or interrupt
+                            while self._current_process.poll() is None:
+                                if self._interrupt_event.is_set():
+                                    break
+                                time.sleep(0.05)
+
+                        with self._process_lock:
+                            self._current_process = None
+
+                    except subprocess.TimeoutExpired:
+                        with self._process_lock:
+                            if self._current_process:
+                                self._current_process.kill()
+                                self._current_process = None
+                    except Exception as e:
+                        print(f"⚠️ SpeechEngine TTS failed: {e!r}")
+                        print(f"[TTS] {text}")
+                else:
+                    # No TTS available — print to console
+                    print(f"[TTS] {text}")
 
             self._is_speaking = False
-            
+
             if self.debug and not self._interrupt_event.is_set():
                 print(f"✅ [SpeechEngine] finished in {time.time() - start:.2f}s")
