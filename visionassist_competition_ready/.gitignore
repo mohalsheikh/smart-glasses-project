@@ -1,1 +1,6 @@
 venv311/
+venv311/
+.venv/
+venv/
+__pycache__/
+*.pyc
