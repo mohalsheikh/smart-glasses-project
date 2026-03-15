@@ -108,7 +108,6 @@ class ObjectDetector:
                         curr_model_demerge[normalized_label] = [id]
                     else: # append to list if dict entry does exist
                         curr_model_demerge[normalized_label].append(id)
-            print(self._demerge[model])
 
         print(f"[ObjectDetector] Loaded {len(self._models)} model(s): {paths}")
 
