@@ -18,7 +18,7 @@ from src.speech_engine import SpeechEngine
 from src.voice_input import VoiceInput
 
 import src.utils.config as config
-from src.utils.object_description import summarize_detections, format_ocr_feedback
+from src.utils.object_description import summarize_detections, format_ocr_feedback, normalize_label
 
 import threading
 from queue import Queue
@@ -34,7 +34,10 @@ class MainController:
         self.camera = CameraHandler()
         self.camera_frame_width = self.camera.frame_width # frame width from camera handler
 
-        self.detector = ObjectDetector(model_name="yolov8n.pt")
+        self.detector = ObjectDetector(model_names=["yolov8n.pt", "currency_detector.pt"])
+        # To use multiple models, pass model_names instead:
+        # self.detector = ObjectDetector(model_names=["yolov8n.pt", "currency_detector.pt"])
+
         # self.currency = CurrencyRecognizer() # we probably don't need this separate component. ideally we should just let the object detector detect currency.
         self.ocr = OCREngine()
         self.speech = SpeechEngine()
@@ -43,11 +46,20 @@ class MainController:
         self.voice = VoiceInput(model_class_names=class_names_dict) # pass the class names from the object detector to the voice input module so it can recognize them in commands.
         self.commands = self.voice.commands # the command grammar minus "[unk]" and the class names.
 
-        self.class_names = list(class_names_dict.values()) # list of class names from the object detector, used for command recognition in voice input.
+        # Build the list of *normalized* class names used for command matching.
+        # This keeps the controller in sync with the normalized grammar that
+        # VoiceInput now builds (see voice_input.py).
+        normalized_names = set()
+        for name in class_names_dict.values():
+            norm = normalize_label(name)
+            if norm is not None:
+                normalized_names.add(norm)
+
+        self.class_names = list(normalized_names)
         self.class_names.sort(key=lambda s: s.count(" "), reverse=True) # sort class names by number of words from greatest to least (determined by counting spaces)
 
-        # set of all individual words that appear in class names, used for partial matching of class names in voice commands.
-        self.partial_class_names = {word for name in self.class_names for word in name.split()}
+        # set of all individual words that appear in (normalized) class names, used for partial matching of class names in voice commands.
+        self.partial_class_names = {word for name in self.class_names for word in name.split()} 
 
         self.speech_queue = Queue() # queue for text to be spoken by the speech thread
         self.voice_input_result_q = Queue() # queue for results from voice input thread
@@ -128,13 +140,13 @@ class MainController:
                 
                 # find the index of the command word in the transcript so that we can extract the part of the transcript after the command word, which should contain the object names that the user wants to deal with.
                 index_of_command = max([cleaned_transcript.rfind(cmd) for cmd in self.commands])
-                transcript_after_command = cleaned_transcript[index_of_command:]
+                transcript_with_command = cleaned_transcript[index_of_command:]
                 
                 # extract object names from the part of the transcript after the command word. 
-                objs_to_process = self._extract_objs_from_transcript(transcript_after_command)
+                objs_to_process = self._extract_objs_from_transcript(transcript_with_command)
 
-                command = transcript_after_command.split()[0]
-                if command in self.commands: 
+                command = transcript_with_command.split()[0]
+                if command in self.commands and not len(objs_to_process) == 0: 
                     description, final_frame = self._route_command(command, cleaned_transcript, frame, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
                 else:
                     description = f"Sorry, I didn't understand the command. I heard '{cleaned_transcript}'."
