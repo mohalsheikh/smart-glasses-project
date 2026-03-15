@@ -38,3 +38,19 @@ venv311/
 .venv/
 venv/
 
+.venv311/
+venv311/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.dat
+*.lm.bin
+*.zip
+telemetry/runs/
+src/telemetry/runs/
