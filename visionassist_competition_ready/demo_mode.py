@@ -2,21 +2,10 @@
 """
 VisionAssist Competition Demo Mode
 ====================================
-Streamlined demo launcher for the CBU Business Competition.
-
 Input Methods:
-  1. ESP32 Button: tap=voice, double-tap=describe, hold=read
-  2. Keyboard: d/v/r/c/p/f/s/t/w/q (for debugging)
-
-Features:
-  - Scene Description (GPT-4o Vision)
-  - Object Detection (YOLOv8)
-  - Text Reading / OCR
-  - Currency Recognition
-  - ASL Sign Language Interpretation
-  - Voice Commands (Whisper)
-  - Navigation (Google Maps)
-  - Weather
+  1. ESP32 Button: tap=voice, double-tap=describe, hold=sign language
+  2. Keyboard: d/v/r/s/c/p/f/t/w/q
+  3. Voice: "start sign language", "what are they signing", etc.
 """
 
 from __future__ import annotations
@@ -76,13 +65,13 @@ import threading
 # DEMO OVERLAY
 # ============================================================================
 class DemoOverlay:
-    """Renders a professional HUD overlay on the demo feed."""
 
     def __init__(self):
         self.show_help = False
         self.last_status = "Ready"
         self.last_status_color = (0, 255, 0)
         self.auto_narrate = False
+        self.asl_active = False
         self.fps_queue = deque(maxlen=30)
         self.last_frame_time = time.perf_counter()
 
@@ -122,6 +111,11 @@ class DemoOverlay:
         cv.putText(frame, f"Status: {self.last_status}", (10, h - 12),
                     cv.FONT_HERSHEY_SIMPLEX, 0.55, self.last_status_color, 1)
 
+        # ASL mode indicator
+        if self.asl_active:
+            cv.putText(frame, "ASL", (w - 140, h - 12),
+                        cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 165, 255), 2)
+
         if self.auto_narrate:
             cv.putText(frame, "AUTO", (w - 70, h - 12),
                         cv.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
@@ -144,15 +138,13 @@ class DemoOverlay:
         commands = [
             ("VisionAssist Controls", (255, 255, 255)),
             ("", (0, 0, 0)),
-            ("Button: tap=voice  2x=describe  hold=read", (255, 200, 100)),
+            ("Button: tap=voice  2x=describe  hold=ASL", (255, 200, 100)),
             ("", (0, 0, 0)),
             ("D  - Describe scene", (0, 255, 0)),
             ("V  - Voice command", (100, 255, 255)),
             ("R  - Read text", (255, 100, 255)),
-            ("S  - Sign language (ASL)", (255, 150, 50)),
+            ("S  - Toggle sign language mode", (0, 165, 255)),
             ("C  - Currency check", (0, 200, 255)),
-            ("P  - Describe people", (255, 200, 0)),
-            ("F  - Find object", (255, 255, 100)),
             ("T  - Current time", (200, 200, 200)),
             ("W  - Weather info", (200, 200, 200)),
             ("", (0, 0, 0)),
@@ -175,7 +167,6 @@ class DemoOverlay:
 # DEMO CONTROLLER
 # ============================================================================
 class DemoController:
-    """Streamlined controller for competition demos."""
 
     def __init__(self, webcam_index: int = 0, enable_voice: bool = True):
         print("=" * 60)
@@ -203,7 +194,7 @@ class DemoController:
         self.asl = None
         if ASLInterpreter:
             try:
-                self.asl = ASLInterpreter()
+                self.asl = ASLInterpreter(speech_engine=self.speech)
             except Exception as e:
                 print(f"⚠️ ASL Interpreter not available: {e}")
 
@@ -223,17 +214,18 @@ class DemoController:
         self._busy = False
         self.last_auto_narrate_time = 0.0
 
-        # ESP32 button controller
+        # ESP32 button controller — long press now toggles ASL mode
         self.esp32 = None
         if ESP32ButtonListener:
             try:
                 self.esp32 = ESP32ButtonListener(
                     on_voice=lambda: self._do_voice(self.last_frame) if self.last_frame is not None else None,
                     on_describe=lambda: self._do_describe(self.last_frame) if self.last_frame is not None else None,
-                    on_read=lambda: self._do_read(self.last_frame) if self.last_frame is not None else None,
+                    on_read=lambda: self._toggle_asl_mode(),
                 )
                 self.esp32.start()
                 print("🎮 ESP32 button controller: CONNECTED")
+                print("   tap=voice | double-tap=describe | hold=sign language")
             except Exception as e:
                 print(f"⚠️ ESP32 listener not available: {e}")
 
@@ -242,7 +234,6 @@ class DemoController:
         print()
 
     def _speak(self, text: str):
-        """Thread-safe speech."""
         text = (text or "").strip()
         if not text:
             return
@@ -250,7 +241,6 @@ class DemoController:
         self.speech.speak(text)
 
     def _async_task(self, fn, status_text: str, status_color=(255, 200, 0)):
-        """Run a function in a background thread with status updates."""
         if self._busy:
             return
         self._busy = True
@@ -269,10 +259,41 @@ class DemoController:
         threading.Thread(target=worker, daemon=True).start()
 
     # ------------------------------------------------------------------
+    # ASL MODE TOGGLE
+    # ------------------------------------------------------------------
+    def _toggle_asl_mode(self):
+        """Toggle continuous ASL interpretation on/off."""
+        if not self.asl or not self.asl.available:
+            self._speak("Sign language interpreter not available.")
+            return
+
+        if self.asl.is_active:
+            # Stop ASL mode
+            sentence = self.asl.stop()
+            self.overlay.asl_active = False
+            self.overlay.set_status("Ready", (0, 255, 0))
+            if sentence and sentence != "No signs were detected.":
+                self._speak(f"Sign language mode off. Full message was: {sentence}")
+            else:
+                self._speak("Sign language mode off.")
+        else:
+            # Start ASL mode
+            self._speak("Sign language mode on. I'll translate what they're signing.")
+
+            # Wait for speech to finish before starting capture
+            time.sleep(3.0)
+
+            self.asl.start(
+                get_frame_fn=lambda: self.last_frame.copy() if self.last_frame is not None else None,
+                speech_engine=self.speech,
+            )
+            self.overlay.asl_active = True
+            self.overlay.set_status("ASL Mode Active", (0, 165, 255))
+
+    # ------------------------------------------------------------------
     # Demo Actions
     # ------------------------------------------------------------------
     def _do_describe(self, frame):
-        """AI scene description."""
         def task():
             answer = self.assistant.handle_query(
                 "describe the environment",
@@ -283,33 +304,30 @@ class DemoController:
         self._async_task(task, "Describing scene...", (0, 255, 0))
 
     def _do_currency(self, frame):
-        """Currency recognition."""
         def task():
             result = self.currency.recognize(frame)
             self._speak(result)
         self._async_task(task, "Checking currency...", (0, 200, 255))
 
     def _do_read(self, frame):
-        """OCR text reading."""
         def task():
             msg = self.doc_reader.start(frame, mode="hybrid")
             self._speak(msg)
         self._async_task(task, "Reading text...", (255, 100, 255))
 
-    def _do_sign_language(self, frame):
-        """ASL sign language interpretation."""
+    def _do_sign_language_once(self, frame):
+        """Single-shot ASL interpretation."""
         if not self.asl or not self.asl.available:
             self._speak("Sign language interpreter not available.")
             return
 
         def task():
             print("🤟 Interpreting sign language...")
-            result = self.asl.interpret_frame(frame, mode="auto")
+            result = self.asl.interpret_once(frame)
             self._speak(result)
-        self._async_task(task, "Reading sign language...", (255, 150, 50))
+        self._async_task(task, "Reading sign language...", (0, 165, 255))
 
     def _do_people(self, frame):
-        """Describe people in scene."""
         def task():
             answer = self.assistant.handle_query(
                 "describe the people I see",
@@ -320,7 +338,6 @@ class DemoController:
         self._async_task(task, "Analyzing people...", (255, 200, 0))
 
     def _do_find_object(self, frame):
-        """Find a specific object."""
         def task():
             answer = self.assistant.handle_query(
                 "what objects do you see around me?",
@@ -331,13 +348,11 @@ class DemoController:
         self._async_task(task, "Finding objects...", (255, 255, 100))
 
     def _do_voice(self, frame):
-        """Voice command interaction (ESP32 button / keyboard)."""
         if not self.voice_listener:
             self._speak("Voice commands not available in this mode.")
             return
 
         def task():
-            # Stop any current speech FIRST
             if hasattr(self.speech, 'interrupt'):
                 self.speech.interrupt()
 
@@ -356,21 +371,35 @@ class DemoController:
 
             t_lower = text.strip().lower()
 
-            # Route sign language commands to ASL interpreter
-            sign_keywords = ["sign language", "signing", "what are they signing",
-                             "read sign", "interpret sign", "asl", "sign to me",
-                             "what is the sign", "translate sign"]
-            if any(k in t_lower for k in sign_keywords):
+            # Route sign language commands
+            sign_start = ["start sign language", "sign language mode", "translate sign",
+                          "start asl", "asl mode", "read sign language", "turn on sign"]
+            sign_stop = ["stop sign language", "stop asl", "turn off sign",
+                         "exit sign language", "end sign language"]
+            sign_once = ["what are they signing", "interpret sign", "what is the sign",
+                         "read the sign", "what sign"]
+
+            if any(k in t_lower for k in sign_stop):
+                if self.asl and self.asl.is_active:
+                    self._toggle_asl_mode()
+                else:
+                    self._speak("Sign language mode is not active.")
+                return
+
+            if any(k in t_lower for k in sign_start):
+                if self.asl and not self.asl.is_active:
+                    self._toggle_asl_mode()
+                else:
+                    self._speak("Sign language mode is already active.")
+                return
+
+            if any(k in t_lower for k in sign_once):
                 if self.asl and self.asl.available and frame is not None:
-                    print("🤟 Routing to ASL interpreter...")
-                    result = self.asl.interpret_frame(frame, mode="auto")
+                    result = self.asl.interpret_once(frame)
                     self._speak(result)
                     return
-                else:
-                    self._speak("Sign language interpreter not available.")
-                    return
 
-            # Route currency commands directly
+            # Route currency commands
             currency_keywords = ["how much money", "identify money", "check money",
                                  "what money", "count money", "what bills", "how much cash",
                                  "scan money", "identify currency"]
@@ -389,7 +418,6 @@ class DemoController:
         self._async_task(task, "Listening...", (100, 255, 255))
 
     def _do_time(self):
-        """Tell the time."""
         def task():
             import datetime
             now = datetime.datetime.now()
@@ -398,7 +426,6 @@ class DemoController:
         self._async_task(task, "Checking time...")
 
     def _do_weather(self):
-        """Weather info."""
         def task():
             answer = self.assistant.handle_query(
                 "what's the weather like?",
@@ -412,7 +439,6 @@ class DemoController:
     # Main Loop
     # ------------------------------------------------------------------
     def run(self):
-        """Main demo loop."""
         frame_idx = 0
         process_every = int(getattr(config, "PROCESS_EVERY_N_FRAMES", 2))
 
@@ -464,7 +490,7 @@ class DemoController:
                 elif key == ord("r"):
                     self._do_read(frame_copy)
                 elif key == ord("s"):
-                    self._do_sign_language(frame_copy)
+                    self._toggle_asl_mode()
                 elif key == ord("c"):
                     self._do_currency(frame_copy)
                 elif key == ord("p"):
@@ -487,6 +513,9 @@ class DemoController:
         except KeyboardInterrupt:
             print("🛑 Interrupted.")
         finally:
+            # Stop ASL if active
+            if self.asl and self.asl.is_active:
+                self.asl.stop()
             if self.esp32:
                 try:
                     self.esp32.stop()

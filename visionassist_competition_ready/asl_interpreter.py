@@ -1,15 +1,20 @@
 """
 ASL Sign Language Interpreter for VisionAssist
 ================================================
-Uses GPT-4o Vision to interpret American Sign Language gestures
-from camera frames. Supports:
-- ASL alphabet fingerspelling (A-Z)
-- Common ASL signs and phrases
-- Number signs (0-9)
-- Full sentence interpretation from sequences
+Production-grade continuous ASL interpretation using GPT-4o Vision.
 
-Much more powerful than MediaPipe + classifier approach because
-GPT-4o understands context, hand shapes, AND body language.
+Features:
+- Continuous monitoring mode (captures every 2s while active)
+- Smart sentence building from fingerspelled letters
+- Avoids repeating the same detection
+- Pauses during TTS playback
+- Three detection modes: alphabet, phrase, auto
+- Natural spoken output for blind users
+
+Usage:
+  interpreter.start(frame_provider)  → starts continuous mode
+  interpreter.stop()                 → stops continuous mode
+  interpreter.interpret_once(frame)  → single-shot interpretation
 """
 
 from __future__ import annotations
@@ -18,19 +23,34 @@ import base64
 import cv2 as cv
 import os
 import time
-from typing import Optional
+import threading
+from typing import Optional, Callable
 
 
 class ASLInterpreter:
     """
-    Interprets ASL sign language from camera frames using GPT-4o Vision.
+    Continuous ASL sign language interpreter using GPT-4o Vision.
+    Designed for blind users who need real-time sign language translation.
     """
 
-    def __init__(self):
+    def __init__(self, speech_engine=None):
         self._client = None
         self._available = False
-        self._last_signs: list = []
-        self._max_history = 20  # Keep last 20 detected signs for sentence building
+        self._speech = speech_engine
+
+        # Continuous mode state
+        self._running = False
+        self._thread = None
+        self._get_frame: Optional[Callable] = None
+        self._capture_interval = 2.5  # seconds between captures
+
+        # Sentence building
+        self._current_word = ""
+        self._current_sentence = ""
+        self._last_detection = ""
+        self._last_detection_time = 0.0
+        self._repeat_cooldown = 3.0  # don't repeat same detection within 3s
+        self._no_sign_count = 0  # track consecutive "no sign" results
 
         try:
             from openai import OpenAI
@@ -44,70 +64,200 @@ class ASLInterpreter:
     def available(self) -> bool:
         return self._available
 
-    def interpret_frame(self, frame, mode: str = "auto") -> str:
+    @property
+    def is_active(self) -> bool:
+        return self._running
+
+    # ------------------------------------------------------------------
+    # CONTINUOUS MODE
+    # ------------------------------------------------------------------
+    def start(self, get_frame_fn: Callable, speech_engine=None):
         """
-        Interpret ASL sign language from a camera frame.
+        Start continuous ASL monitoring.
+        get_frame_fn: callable that returns the latest camera frame (numpy array)
+        """
+        if self._running:
+            return
+        if not self._available:
+            return
 
-        Args:
-            frame: OpenCV BGR image (numpy array)
-            mode: "auto" (detect what's being signed),
-                  "alphabet" (expect fingerspelling),
-                  "phrase" (expect common signs/phrases)
+        self._get_frame = get_frame_fn
+        if speech_engine:
+            self._speech = speech_engine
+        self._running = True
+        self._current_word = ""
+        self._current_sentence = ""
+        self._last_detection = ""
+        self._no_sign_count = 0
 
-        Returns:
-            String describing what was signed, or error message.
+        self._thread = threading.Thread(target=self._continuous_loop, daemon=True)
+        self._thread.start()
+        print("🤟 ASL continuous mode: STARTED")
+
+    def stop(self) -> str:
+        """Stop continuous ASL monitoring. Returns the accumulated sentence."""
+        self._running = False
+        if self._thread:
+            self._thread.join(timeout=3.0)
+            self._thread = None
+
+        # Build final output
+        final = self._build_final_sentence()
+        self._current_word = ""
+        self._current_sentence = ""
+        self._last_detection = ""
+        print("🤟 ASL continuous mode: STOPPED")
+        return final
+
+    def _continuous_loop(self):
+        """Background loop that continuously captures and interprets."""
+        while self._running:
+            try:
+                # Wait for TTS to finish before capturing (avoid picking up nothing while speaking)
+                if self._speech and self._speech.is_speaking():
+                    time.sleep(0.5)
+                    continue
+
+                # Get latest frame
+                frame = self._get_frame() if self._get_frame else None
+                if frame is None:
+                    time.sleep(0.5)
+                    continue
+
+                # Interpret the frame
+                result = self._interpret_frame_internal(frame)
+
+                if result and result.get("detected"):
+                    sign_type = result["type"]  # "letter", "word", "phrase", "none"
+                    value = result["value"]
+                    raw = result["raw"]
+
+                    # Skip if same as last detection (within cooldown)
+                    now = time.time()
+                    if value == self._last_detection and (now - self._last_detection_time) < self._repeat_cooldown:
+                        time.sleep(self._capture_interval)
+                        continue
+
+                    self._last_detection = value
+                    self._last_detection_time = now
+                    self._no_sign_count = 0
+
+                    # Handle based on type
+                    if sign_type == "letter":
+                        self._current_word += value
+                        # Speak the letter
+                        self._say(f"{value}")
+
+                    elif sign_type == "word" or sign_type == "phrase":
+                        # If we were building a word, finalize it first
+                        if self._current_word:
+                            self._current_sentence += self._current_word + " "
+                            self._current_word = ""
+                        self._say(raw)
+
+                    elif sign_type == "space":
+                        # Space sign — finalize current word
+                        if self._current_word:
+                            word = self._current_word
+                            self._current_sentence += word + " "
+                            self._current_word = ""
+                            self._say(f"Word: {word}")
+
+                else:
+                    self._no_sign_count += 1
+
+                    # After 3 consecutive no-signs, if we have a word, speak it
+                    if self._no_sign_count >= 3 and self._current_word:
+                        word = self._current_word
+                        self._current_sentence += word + " "
+                        self._current_word = ""
+                        self._say(f"Word: {word}")
+
+                time.sleep(self._capture_interval)
+
+            except Exception as e:
+                if self._running:
+                    print(f"🤟 ASL error: {e}")
+                    time.sleep(2.0)
+
+    def _build_final_sentence(self) -> str:
+        """Build the final sentence from accumulated words."""
+        sentence = self._current_sentence.strip()
+        if self._current_word:
+            sentence += (" " if sentence else "") + self._current_word
+        return sentence.strip() if sentence else "No signs were detected."
+
+    def _say(self, text: str):
+        """Speak text through the speech engine."""
+        if self._speech and text:
+            print(f"🤟 ASL: {text}")
+            self._speech.speak(text)
+
+    # ------------------------------------------------------------------
+    # SINGLE-SHOT MODE
+    # ------------------------------------------------------------------
+    def interpret_once(self, frame) -> str:
+        """
+        One-shot ASL interpretation. Returns spoken description.
         """
         if not self._available or self._client is None:
             return "Sign language interpreter not available."
-
         if frame is None:
-            return "No image available to interpret."
+            return "No image available."
+
+        result = self._interpret_frame_internal(frame)
+        if result and result.get("raw"):
+            return result["raw"]
+        return "I don't see anyone signing right now."
+
+    # ------------------------------------------------------------------
+    # CORE INTERPRETATION
+    # ------------------------------------------------------------------
+    def _interpret_frame_internal(self, frame) -> Optional[dict]:
+        """
+        Core interpretation. Returns dict with:
+          detected: bool
+          type: "letter" | "word" | "phrase" | "space" | "none"
+          value: normalized value (uppercase letter, word, etc.)
+          raw: raw spoken text from GPT-4o
+        """
+        if not self._available or self._client is None or frame is None:
+            return None
 
         try:
-            # Encode frame to base64 JPEG
-            _, buffer = cv.imencode('.jpg', frame, [cv.IMWRITE_JPEG_QUALITY, 85])
+            # Encode frame
+            _, buffer = cv.imencode('.jpg', frame, [cv.IMWRITE_JPEG_QUALITY, 90])
             b64_image = base64.b64encode(buffer).decode('utf-8')
 
-            # Build prompt based on mode
-            if mode == "alphabet":
-                prompt = (
-                    "You are an expert ASL (American Sign Language) interpreter. "
-                    "Look at this image and identify what ASL fingerspelling letter is being shown. "
-                    "Focus on the hand shape, finger positions, and orientation. "
-                    "Respond with ONLY the letter or number being signed. "
-                    "If no hand is visible or the sign is unclear, say 'No sign detected'. "
-                    "Be concise — just the letter/number."
-                )
-            elif mode == "phrase":
-                prompt = (
-                    "You are an expert ASL (American Sign Language) interpreter. "
-                    "Look at this image and identify what ASL sign or phrase is being shown. "
-                    "Consider hand shape, position relative to the body, facial expression, "
-                    "and movement implied by the pose. "
-                    "Common signs include: hello, thank you, please, sorry, help, "
-                    "yes, no, I love you, good, bad, eat, drink, water, more, stop, go. "
-                    "Respond with a short description of what is being signed. "
-                    "If no sign is detected, say 'No sign detected'."
-                )
-            else:  # auto
-                prompt = (
-                    "You are an expert ASL (American Sign Language) interpreter helping "
-                    "a blind person understand what a deaf person is signing to them. "
-                    "Look at this image carefully and identify any ASL sign language being performed. "
-                    "This could be:\n"
-                    "- A fingerspelled letter (A-Z)\n"
-                    "- A number (0-9)\n"
-                    "- A common ASL sign or phrase\n"
-                    "- A gesture or expression\n\n"
-                    "Focus on: hand shape, finger positions, hand orientation, "
-                    "position relative to the body, and facial expression.\n\n"
-                    "Respond naturally as if telling a blind person what someone is signing. "
-                    "For example: 'They are signing the letter A' or "
-                    "'They are signing hello' or 'They are signing I love you'.\n\n"
-                    "If no hands are visible or no sign is being made, say "
-                    "'I don't see anyone signing right now'.\n"
-                    "Keep your response to one short sentence."
-                )
+            prompt = (
+                "You are an expert American Sign Language (ASL) interpreter. "
+                "A blind person is wearing smart glasses with a camera, and someone in front of them "
+                "is communicating using ASL. Your job is to translate what they see.\n\n"
+                "CAREFULLY examine this image for ANY hand gestures or signs:\n\n"
+                "1. Look for hands — even partially visible ones\n"
+                "2. Analyze hand shape, finger positions, thumb placement\n"
+                "3. Check hand orientation (palm facing camera, away, sideways)\n"
+                "4. Note position relative to body (near face, chest, waist)\n"
+                "5. Consider facial expression (important in ASL)\n\n"
+                "RESPOND IN EXACTLY THIS FORMAT:\n"
+                "TYPE: [letter/word/phrase/none]\n"
+                "SIGN: [what is being signed]\n"
+                "SPOKEN: [natural sentence to tell the blind person]\n\n"
+                "Examples:\n"
+                "TYPE: letter\nSIGN: A\nSPOKEN: The letter A\n\n"
+                "TYPE: word\nSIGN: hello\nSPOKEN: They are saying hello\n\n"
+                "TYPE: phrase\nSIGN: thank you\nSPOKEN: They are saying thank you\n\n"
+                "TYPE: letter\nSIGN: I love you\nSPOKEN: They are signing I love you\n\n"
+                "TYPE: none\nSIGN: none\nSPOKEN: No signing detected\n\n"
+                "IMPORTANT:\n"
+                "- If you see a hand making ANY deliberate shape, try to interpret it as ASL\n"
+                "- Common ASL signs: hello, thank you, please, sorry, help, yes, no, "
+                "I love you, good, bad, more, stop, go, eat, drink, water, name, "
+                "what, where, when, how, why, who, understand, don't understand\n"
+                "- For fingerspelling: identify the specific letter (A-Z)\n"
+                "- Be confident in your interpretation — the blind person relies on you\n"
+                "- Only say 'none' if there are truly NO hands visible at all"
+            )
 
             response = self._client.chat.completions.create(
                 model="gpt-4o",
@@ -126,40 +276,52 @@ class ASLInterpreter:
                         ],
                     }
                 ],
-                max_tokens=150,
-                temperature=0.2,
+                max_tokens=200,
+                temperature=0.1,
             )
 
-            result = response.choices[0].message.content.strip()
-
-            # Track sign history for sentence building
-            if result and "don't see" not in result.lower() and "no sign" not in result.lower():
-                self._last_signs.append({
-                    "text": result,
-                    "time": time.time(),
-                })
-                # Trim history
-                if len(self._last_signs) > self._max_history:
-                    self._last_signs = self._last_signs[-self._max_history:]
-
-            return result
+            text = response.choices[0].message.content.strip()
+            return self._parse_response(text)
 
         except Exception as e:
-            return f"Sorry, I couldn't interpret the sign. Error: {str(e)}"
+            print(f"🤟 ASL interpretation error: {e}")
+            return None
 
-    def get_recent_signs(self, seconds: float = 30.0) -> str:
-        """Get summary of recently detected signs."""
-        if not self._last_signs:
-            return "No signs detected recently."
+    def _parse_response(self, text: str) -> dict:
+        """Parse the structured GPT-4o response."""
+        result = {
+            "detected": False,
+            "type": "none",
+            "value": "",
+            "raw": "",
+        }
 
-        cutoff = time.time() - seconds
-        recent = [s["text"] for s in self._last_signs if s["time"] > cutoff]
+        lines = text.strip().split("\n")
+        for line in lines:
+            line = line.strip()
+            if line.upper().startswith("TYPE:"):
+                result["type"] = line.split(":", 1)[1].strip().lower()
+            elif line.upper().startswith("SIGN:"):
+                result["value"] = line.split(":", 1)[1].strip()
+            elif line.upper().startswith("SPOKEN:"):
+                result["raw"] = line.split(":", 1)[1].strip()
 
-        if not recent:
-            return "No signs detected in the last 30 seconds."
+        # If parsing failed, use the raw text
+        if not result["raw"] and text:
+            result["raw"] = text
+            # Try to detect type from content
+            t = text.lower()
+            if "letter" in t:
+                result["type"] = "letter"
+            elif any(w in t for w in ["signing", "saying", "sign"]):
+                result["type"] = "word"
 
-        return "Recent signs: " + " → ".join(recent)
+        # Determine if a sign was detected
+        if result["type"] != "none" and result["value"].lower() not in ["none", "no", ""]:
+            result["detected"] = True
 
-    def clear_history(self):
-        """Clear sign detection history."""
-        self._last_signs.clear()
+            # Normalize letter values
+            if result["type"] == "letter" and len(result["value"]) == 1:
+                result["value"] = result["value"].upper()
+
+        return result
