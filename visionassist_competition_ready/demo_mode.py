@@ -6,7 +6,17 @@ Streamlined demo launcher for the CBU Business Competition.
 
 Input Methods:
   1. ESP32 Button: tap=voice, double-tap=describe, hold=read
-  2. Keyboard: d/v/r/c/p/f/t/w/q (for debugging)
+  2. Keyboard: d/v/r/c/p/f/s/t/w/q (for debugging)
+
+Features:
+  - Scene Description (GPT-4o Vision)
+  - Object Detection (YOLOv8)
+  - Text Reading / OCR
+  - Currency Recognition
+  - ASL Sign Language Interpretation
+  - Voice Commands (Whisper)
+  - Navigation (Google Maps)
+  - Weather
 """
 
 from __future__ import annotations
@@ -50,6 +60,11 @@ try:
     from esp32_listener import ESP32ButtonListener
 except ImportError:
     ESP32ButtonListener = None
+
+try:
+    from asl_interpreter import ASLInterpreter
+except ImportError:
+    ASLInterpreter = None
 
 import src.utils.config as config
 from collections import deque
@@ -134,6 +149,7 @@ class DemoOverlay:
             ("D  - Describe scene", (0, 255, 0)),
             ("V  - Voice command", (100, 255, 255)),
             ("R  - Read text", (255, 100, 255)),
+            ("S  - Sign language (ASL)", (255, 150, 50)),
             ("C  - Currency check", (0, 200, 255)),
             ("P  - Describe people", (255, 200, 0)),
             ("F  - Find object", (255, 255, 100)),
@@ -182,6 +198,14 @@ class DemoController:
             weather_client=self.weather_client,
             navigation_client=self.navigation_client,
         )
+
+        # ASL Sign Language Interpreter
+        self.asl = None
+        if ASLInterpreter:
+            try:
+                self.asl = ASLInterpreter()
+            except Exception as e:
+                print(f"⚠️ ASL Interpreter not available: {e}")
 
         self.voice_listener = None
         if enable_voice and VoiceListener:
@@ -272,6 +296,18 @@ class DemoController:
             self._speak(msg)
         self._async_task(task, "Reading text...", (255, 100, 255))
 
+    def _do_sign_language(self, frame):
+        """ASL sign language interpretation."""
+        if not self.asl or not self.asl.available:
+            self._speak("Sign language interpreter not available.")
+            return
+
+        def task():
+            print("🤟 Interpreting sign language...")
+            result = self.asl.interpret_frame(frame, mode="auto")
+            self._speak(result)
+        self._async_task(task, "Reading sign language...", (255, 150, 50))
+
     def _do_people(self, frame):
         """Describe people in scene."""
         def task():
@@ -319,6 +355,22 @@ class DemoController:
             self.overlay.set_status(f"Heard: {text[:40]}...", (100, 255, 255))
 
             t_lower = text.strip().lower()
+
+            # Route sign language commands to ASL interpreter
+            sign_keywords = ["sign language", "signing", "what are they signing",
+                             "read sign", "interpret sign", "asl", "sign to me",
+                             "what is the sign", "translate sign"]
+            if any(k in t_lower for k in sign_keywords):
+                if self.asl and self.asl.available and frame is not None:
+                    print("🤟 Routing to ASL interpreter...")
+                    result = self.asl.interpret_frame(frame, mode="auto")
+                    self._speak(result)
+                    return
+                else:
+                    self._speak("Sign language interpreter not available.")
+                    return
+
+            # Route currency commands directly
             currency_keywords = ["how much money", "identify money", "check money",
                                  "what money", "count money", "what bills", "how much cash",
                                  "scan money", "identify currency"]
@@ -411,6 +463,8 @@ class DemoController:
                     self._do_voice(frame_copy)
                 elif key == ord("r"):
                     self._do_read(frame_copy)
+                elif key == ord("s"):
+                    self._do_sign_language(frame_copy)
                 elif key == ord("c"):
                     self._do_currency(frame_copy)
                 elif key == ord("p"):
