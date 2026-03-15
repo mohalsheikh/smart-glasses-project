@@ -14,6 +14,8 @@ Features:
 - INTERRUPT capability - stops current speech immediately
 - Clear queue functionality
 - Dedupe to avoid rapid repeats
+- In-memory Piper model for instant speech generation
+- Silence padding for Bluetooth speaker wake-up
 
 Use interrupt() when user wants to speak - stops TTS immediately.
 """
@@ -28,6 +30,7 @@ import threading
 import os
 import signal
 import tempfile
+import wave
 from queue import Queue, Empty
 from typing import Optional
 
@@ -62,8 +65,9 @@ class SpeechEngine:
     Text-to-speech wrapper with interrupt support.
 
     Priority on Linux:
-      1. Piper TTS (neural, natural sounding)
-      2. espeak-ng (robotic fallback)
+      1. Piper TTS in-memory (neural, natural sounding, instant)
+      2. Piper TTS CLI fallback
+      3. espeak-ng (robotic fallback)
 
     Key feature: interrupt() method stops ANY current speech immediately,
     useful when user presses a key to speak.
@@ -76,6 +80,8 @@ class SpeechEngine:
         self._use_piper = False
         self._piper_model: Optional[str] = None
         self._piper_cmd: Optional[str] = None
+        self._piper_voice = None
+        self._piper_sample_rate = 22050
 
         # Detect TTS backend
         if "darwin" in self._platform:
@@ -91,6 +97,17 @@ class SpeechEngine:
                 self._piper_model = piper_model
                 model_name = os.path.basename(piper_model)
                 backend = f"Piper TTS (neural voice: {model_name})"
+
+                # Try to load Piper model into memory for fast synthesis
+                try:
+                    from piper import PiperVoice
+                    self._piper_voice = PiperVoice.load(self._piper_model)
+                    self._piper_sample_rate = self._piper_voice.config.sample_rate
+                    backend += " [in-memory]"
+                    print(f"  Piper model loaded into memory (sample rate: {self._piper_sample_rate})")
+                except Exception as e:
+                    print(f"  Piper Python library not available, using CLI ({e})")
+                    self._piper_voice = None
             else:
                 # Fallback to espeak
                 self._linux_tts = _find_linux_tts()
@@ -243,13 +260,65 @@ class SpeechEngine:
     def _speak_piper(self, text: str) -> None:
         """
         Speak using Piper TTS.
-        Outputs to a temp WAV file first, then plays with aplay.
-        This prevents audio cutoff on Bluetooth speakers.
+        Uses Python library if available (model stays in memory = fast).
+        Falls back to CLI subprocess.
+        Prepends silence so Bluetooth speakers have time to wake up.
         """
         try:
-            tmp_wav = os.path.join(tempfile.gettempdir(), "visionassist_tts.wav")
+            # Use in-memory model if loaded
+            if self._piper_voice is not None:
+                tmp_raw = os.path.join(tempfile.gettempdir(), "visionassist_tts_raw.wav")
+                tmp_wav = os.path.join(tempfile.gettempdir(), "visionassist_tts.wav")
 
-            # Step 1: Generate WAV file
+                # Generate speech to a temp file
+                with wave.open(tmp_raw, "wb") as wf:
+                    self._piper_voice.synthesize_wav(text, wf)
+
+                if self._interrupt_event.is_set():
+                    return
+
+                # Prepend 0.5s silence so Bluetooth speaker has time to wake up
+                with wave.open(tmp_raw, "rb") as src:
+                    params = src.getparams()
+                    audio_data = src.readframes(src.getnframes())
+
+                silence_frames = int(params.framerate * 1.0)
+                silence = b'\x00' * (silence_frames * params.sampwidth * params.nchannels)
+
+                with wave.open(tmp_wav, "wb") as dst:
+                    dst.setparams(params)
+                    dst.writeframes(silence + audio_data)
+
+                try:
+                    os.remove(tmp_raw)
+                except Exception:
+                    pass
+
+                if self._interrupt_event.is_set():
+                    return
+
+                # Play it
+                if os.path.exists(tmp_wav):
+                    with self._process_lock:
+                        self._current_process = subprocess.Popen(
+                            ["aplay", "-q", tmp_wav],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                        )
+                    while self._current_process and self._current_process.poll() is None:
+                        if self._interrupt_event.is_set():
+                            break
+                        time.sleep(0.05)
+                    with self._process_lock:
+                        self._current_process = None
+                    try:
+                        os.remove(tmp_wav)
+                    except Exception:
+                        pass
+                return
+
+            # Fallback: CLI subprocess (slower — loads model each time)
+            tmp_wav = os.path.join(tempfile.gettempdir(), "visionassist_tts.wav")
             subprocess.run(
                 [self._piper_cmd, "--model", self._piper_model, "--length-scale", "1.3", "--output_file", tmp_wav],
                 input=text.encode(),
@@ -257,11 +326,8 @@ class SpeechEngine:
                 stderr=subprocess.DEVNULL,
                 timeout=30,
             )
-
             if self._interrupt_event.is_set():
                 return
-
-            # Step 2: Play the WAV file
             if os.path.exists(tmp_wav):
                 with self._process_lock:
                     self._current_process = subprocess.Popen(
@@ -269,15 +335,12 @@ class SpeechEngine:
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                     )
-
                 while self._current_process and self._current_process.poll() is None:
                     if self._interrupt_event.is_set():
                         break
                     time.sleep(0.05)
-
                 with self._process_lock:
                     self._current_process = None
-
                 try:
                     os.remove(tmp_wav)
                 except Exception:
@@ -296,7 +359,6 @@ class SpeechEngine:
 
         if "linux" in self._platform and self._linux_tts:
             if self._linux_tts in ("espeak-ng", "espeak"):
-                # -s 160 = speed, -p 50 = pitch (natural sounding)
                 return [self._linux_tts, "-s", "160", "-p", "50", text]
             elif self._linux_tts == "festival":
                 return ["festival", "--tts"]
@@ -341,7 +403,6 @@ class SpeechEngine:
                 if cmd:
                     try:
                         if self._linux_tts == "festival":
-                            # festival reads from stdin
                             with self._process_lock:
                                 self._current_process = subprocess.Popen(
                                     cmd,
@@ -351,7 +412,6 @@ class SpeechEngine:
                                 )
                             self._current_process.communicate(input=text.encode(), timeout=30)
                         else:
-                            # macOS 'say' or espeak: text is part of the command
                             with self._process_lock:
                                 self._current_process = subprocess.Popen(
                                     cmd,
@@ -359,7 +419,6 @@ class SpeechEngine:
                                     stderr=subprocess.DEVNULL,
                                 )
 
-                            # Wait for completion or interrupt
                             while self._current_process.poll() is None:
                                 if self._interrupt_event.is_set():
                                     break
@@ -377,7 +436,6 @@ class SpeechEngine:
                         print(f"⚠️ SpeechEngine TTS failed: {e!r}")
                         print(f"[TTS] {text}")
                 else:
-                    # No TTS available — print to console
                     print(f"[TTS] {text}")
 
             self._is_speaking = False

@@ -3,32 +3,10 @@
 VisionAssist Competition Demo Mode
 ====================================
 Streamlined demo launcher for the CBU Business Competition.
-Runs with just a camera (laptop webcam or Pi Camera) - no sensors needed.
-Shows: Object Detection, Scene Description, Currency Recognition, 
-       OCR/Reading, Voice Commands, and Sign Language.
 
-Usage:
-  python demo_mode.py              # Standard demo
-  python demo_mode.py --no-voice   # Skip voice (keyboard only)
-  python demo_mode.py --webcam 0   # Specify camera index
-
-Controls:
-  d - Describe scene (AI narration)
-  v - Voice command
-  r - Read text in view
-  c - Identify currency
-  p - People description
-  f - Find object (asks what to find)
-  t - Quick time check
-  w - Weather info
-  q - Quit
-  SPACE - Toggle auto-narration
-  h - Show/hide help overlay
-
-ESP32 Button (single BOOT button):
-  Short press  → Voice command
-  Double press → Describe scene
-  Long press   → Read text
+Input Methods:
+  1. ESP32 Button: tap=voice, double-tap=describe, hold=read
+  2. Keyboard: d/v/r/c/p/f/t/w/q (for debugging)
 """
 
 from __future__ import annotations
@@ -39,17 +17,15 @@ import argparse
 import time
 from pathlib import Path
 
-# Ensure project root is on path
 PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Set optimized defaults for demo
 os.environ.setdefault("SHOW_DEBUG_WINDOW", "1")
-os.environ.setdefault("PROCESS_EVERY_N_FRAMES", "2")  # Faster detection
-os.environ.setdefault("OBSTACLE_ENABLED", "0")  # Disable for clean demo
+os.environ.setdefault("PROCESS_EVERY_N_FRAMES", "2")
+os.environ.setdefault("OBSTACLE_ENABLED", "0")
 os.environ.setdefault("GUIDANCE_ENABLED", "0")
-os.environ.setdefault("TELEMETRY_ENABLED", "0")  # Disable telemetry noise
+os.environ.setdefault("TELEMETRY_ENABLED", "0")
 
 import cv2 as cv
 import numpy as np
@@ -82,19 +58,10 @@ import threading
 
 
 # ============================================================================
-# DEMO OVERLAY - Makes the demo look professional
+# DEMO OVERLAY
 # ============================================================================
 class DemoOverlay:
     """Renders a professional HUD overlay on the demo feed."""
-
-    FEATURE_COLORS = {
-        "detection": (0, 255, 0),
-        "scene_ai": (255, 200, 0),
-        "currency": (0, 200, 255),
-        "ocr": (255, 100, 255),
-        "voice": (100, 255, 255),
-        "sign": (255, 255, 100),
-    }
 
     def __init__(self):
         self.show_help = False
@@ -118,27 +85,21 @@ class DemoOverlay:
     def render(self, frame: np.ndarray, detections: List[Dict], fps: float) -> np.ndarray:
         h, w = frame.shape[:2]
 
-        # Semi-transparent top bar
         overlay = frame.copy()
         cv.rectangle(overlay, (0, 0), (w, 50), (20, 20, 20), -1)
         frame = cv.addWeighted(overlay, 0.7, frame, 0.3, 0)
 
-        # Title
         cv.putText(frame, "VisionAssist", (10, 35),
                     cv.FONT_HERSHEY_SIMPLEX, 1.0, (255, 255, 255), 2)
         cv.putText(frame, "AI Smart Glasses", (220, 35),
                     cv.FONT_HERSHEY_SIMPLEX, 0.6, (150, 150, 150), 1)
-
-        # FPS
         cv.putText(frame, f"FPS: {fps:.1f}", (w - 130, 35),
                     cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1)
 
-        # Object count
         n_objects = len(detections) if detections else 0
         cv.putText(frame, f"Objects: {n_objects}", (w - 280, 35),
                     cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1)
 
-        # Status bar at bottom
         overlay2 = frame.copy()
         cv.rectangle(overlay2, (0, h - 40), (w, h), (20, 20, 20), -1)
         frame = cv.addWeighted(overlay2, 0.7, frame, 0.3, 0)
@@ -150,7 +111,6 @@ class DemoOverlay:
             cv.putText(frame, "AUTO", (w - 70, h - 12),
                         cv.FONT_HERSHEY_SIMPLEX, 0.55, (0, 200, 255), 2)
 
-        # Help overlay
         if self.show_help:
             frame = self._render_help(frame)
 
@@ -167,7 +127,9 @@ class DemoOverlay:
         dy = 30
 
         commands = [
-            ("VisionAssist Demo Controls", (255, 255, 255)),
+            ("VisionAssist Controls", (255, 255, 255)),
+            ("", (0, 0, 0)),
+            ("Button: tap=voice  2x=describe  hold=read", (255, 200, 100)),
             ("", (0, 0, 0)),
             ("D  - Describe scene", (0, 255, 0)),
             ("V  - Voice command", (100, 255, 255)),
@@ -181,8 +143,6 @@ class DemoOverlay:
             ("SPACE - Toggle auto-narrate", (0, 200, 255)),
             ("H  - Toggle this help", (150, 150, 150)),
             ("Q  - Quit", (100, 100, 255)),
-            ("", (0, 0, 0)),
-            ("ESP32: tap=voice  2x=describe  hold=read", (255, 200, 100)),
         ]
 
         for i, (text, color) in enumerate(commands):
@@ -254,8 +214,7 @@ class DemoController:
                 print(f"⚠️ ESP32 listener not available: {e}")
 
         print()
-        print("🎮 Press 'H' for controls | Press 'D' to describe scene")
-        print("🚀 Demo ready! Point the camera and go.")
+        print("🚀 Demo ready! Press the button to get started.")
         print()
 
     def _speak(self, text: str):
@@ -336,7 +295,7 @@ class DemoController:
         self._async_task(task, "Finding objects...", (255, 255, 100))
 
     def _do_voice(self, frame):
-        """Voice command interaction."""
+        """Voice command interaction (ESP32 button / keyboard)."""
         if not self.voice_listener:
             self._speak("Voice commands not available in this mode.")
             return
@@ -346,23 +305,19 @@ class DemoController:
             if hasattr(self.speech, 'interrupt'):
                 self.speech.interrupt()
 
-            # Wait for speech to fully stop (so mic doesn't pick up TTS)
             time.sleep(0.3)
             self.overlay.set_status("Listening...", (100, 255, 255))
-
-            # Audio feedback: print to console (no speaker cue — mic picks it up)
             print("🎤 Listening for voice command...")
 
             text = self.voice_listener.listen_and_transcribe()
 
             if not text:
-                self._speak("I didn't catch that. Press V and try again.")
+                self._speak("I didn't catch that. Try again.")
                 return
 
             print(f"🎤 Heard: {text!r}")
             self.overlay.set_status(f"Heard: {text[:40]}...", (100, 255, 255))
 
-            # Route currency commands directly
             t_lower = text.strip().lower()
             currency_keywords = ["how much money", "identify money", "check money",
                                  "what money", "count money", "what bills", "how much cash",
@@ -409,8 +364,7 @@ class DemoController:
         frame_idx = 0
         process_every = int(getattr(config, "PROCESS_EVERY_N_FRAMES", 2))
 
-        # Show intro speech
-        self._speak("Hey there! VisionAssist is ready. Press V to talk to me, or D and I'll describe what's around you.")
+        self._speak("Hey there! VisionAssist is ready. Press the button to talk to me, or double tap and I'll describe what's around you.")
 
         try:
             while True:
@@ -419,19 +373,15 @@ class DemoController:
                     print("⚠️ No frame from camera.")
                     break
 
-                # Store latest frame for ESP32 button callbacks
                 self.last_frame = frame.copy()
 
                 fps = self.overlay.update_fps()
-                frame_height, frame_width = frame.shape[:2]
 
-                # Run detection
                 if frame_idx % process_every == 0:
                     detections, annotated = self.detector.detect(frame, annotate=True)
                     self.last_detections = detections
                     self.last_annotated = annotated
 
-                    # Update assistant context
                     try:
                         self.assistant.update_scene_context(frame=frame, detections=detections)
                     except Exception:
@@ -440,18 +390,15 @@ class DemoController:
                     detections = self.last_detections
                     annotated = self.last_annotated if self.last_annotated is not None else frame
 
-                # Auto-narrate (if enabled)
                 if self.overlay.auto_narrate and not self._busy:
                     now = time.time()
                     if now - self.last_auto_narrate_time > 8.0:
                         self._do_describe(frame.copy())
                         self.last_auto_narrate_time = now
 
-                # Render overlay
                 display = self.overlay.render(annotated, detections, fps)
                 cv.imshow("VisionAssist Demo", display)
 
-                # Handle keys
                 key = cv.waitKey(1) & 0xFF
                 frame_copy = frame.copy()
 
@@ -486,7 +433,6 @@ class DemoController:
         except KeyboardInterrupt:
             print("🛑 Interrupted.")
         finally:
-            # Clean up ESP32 listener
             if self.esp32:
                 try:
                     self.esp32.stop()
