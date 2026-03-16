@@ -74,8 +74,8 @@ class ObjectDetector:
         # ---------- load models and construct name to id converter and label demerger ----------
         self._models: List[YOLO] = []
 
-        # maps model names to a dictionary that maps internal class names to that classes' id
-        self._name_to_id: dict[str, dict[str, int]] = dict()
+        # maps models to a dictionary that maps internal class names to that classes' id
+        self._name_to_id: dict[YOLO, dict[str, int]] = dict()
         
         # maps models to a dictionary that maps normalized label names to the class ids from that model that are merged into that label.
         # for instance, an example entry may be: {"currency_detector.pt": {"one dollar bill" : [class id of one-front, class id of one-back]}}
