@@ -101,12 +101,10 @@ class CameraHandler:
         cv.imshow(window_name, image) # show the provided frame in a window with the specified name
 
     def capture_and_show_frame(self, window_name="Camera"):
-        frame = self.capture_frame() # call capture_frame to get a frame from the camera.
-
-        if frame is not None: # if capturing the frame was successful...
-            self.show_image(frame, window_name) # show the captured frame in a window with the specified name
+        frame = self.capture_frame() # call capture_frame to get a frame from the camera
+        self.show_image(frame, window_name) # show the captured frame in a window with the specified name (auto error if None)
         
-        return frame # return the captured frame (or None if capturing failed)
+        return frame 
 
     # waits for a specific key to be pressed. returns True if the key is pressed, False otherwise.
     def wait_key_press(self, key: str, delay: int = 1):

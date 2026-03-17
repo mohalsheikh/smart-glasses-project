@@ -22,7 +22,10 @@ from src.utils.object_description import summarize_detections, format_ocr_feedba
 
 import threading
 from queue import Queue
+from collections import deque
 import enum
+
+FRAME_COUNT = 3 # the number of frames provided to objectdetector and ocrengine for detection and reading.
 
 class VoiceInputState(enum.Enum):
     WAITING_FOR_WAKE_WORD = 1,
@@ -114,11 +117,12 @@ class MainController:
 ##############################################################################################################
 # # Action commands
 ##############################################################################################################  
+            #TODO replace frame parameter with list of frames when we start capturing multiple... [frame] is just here to test detecting from a list.
             case "detect":
-                detections, final_frame = self.detector.detect(frame, annotate=True, objects=objs) # detect objects and get annotated frame
+                detections, final_frame = self.detector.detect([frame], annotate=True, objects=objs) # detect objects and get annotated frame
                 description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections in natural language
             case "read": 
-                detections, final_frame = self.detector.detect(frame, annotate=True, objects=objs) # detect objects and get annotated frame
+                detections, final_frame = self.detector.detect([frame], annotate=True, objects=objs) # detect objects and get annotated frame
                 detections = self.ocr.attach_crop_text_to_detected_objects(frame, detections) # read text on objects
 
                 self._print_ocr_feedback(detections)
@@ -216,24 +220,32 @@ class MainController:
             print(f"[Per-object OCR attachment ERROR] {type(e).__name__}: {e}")
 
     def run(self) -> None:    
-        # frame variable used to hold the current frame from the camera.
-        # initially showing the first frame of the camera to open the window.
-        frame = self.camera.capture_and_show_frame("Live Camera Feed")
+        # frames deque (used as queue) used to hold the FRAME_COUNT most recent frames from the camera.
+        frames = deque()
+
+        # initially populating with FRAME_COUNT frames from the camera.
+        # this serves the purpose of making it so that we don't have to check the size of the frames deque when we add to it;
+        # whenever we capture a new frame we always will add one and remove one, so the size will always be constant and equal to FRAME_COUNT after this initial population step.
+        for _ in range(FRAME_COUNT):
+            frame = self.camera.capture_and_show_frame("Live Camera Feed")
+            frames.append(frame)
         
-        # validate that initial frame capture succeeded
-        if frame is None:
-            print("❌ Failed to capture initial frame from camera.")
-            # self.speech.speak("Camera initialization failed. Please check device.")
-            return
-        
-        annotated_frame = frame.copy() if frame is not None else None
+        # list of annotations from most recent detections, shown in detections window.
+        # initialized to the initial FRAME_COUNT unannotated frames
+        annotated_frames = list(frames)
+
+        annotated_frames_index = 0 # index of the annotated frame to show in the detections window
 
         self._start_worker_threads() # start the display and speech worker threads
 
         while True: # main loop
+            # capturing a new frame and replacing the oldest frame in the frames deque with it
+            frame = self.camera.capture_and_show_frame(window_name="Live Camera Feed") # keep showing the camera feed for our own convenience
+            frames.append(frame) 
+            frames.popleft()
 
-            self.camera.capture_and_show_frame(window_name="Live Camera Feed") # keep showing the camera feed for our own convenience
-            self.camera.show_image(annotated_frame, window_name="Detections") # just keep showing the last detections frame so that the window doesn't say not responding.
+            self.camera.show_image(annotated_frames[annotated_frames_index], window_name="Detections")
+            annotated_frames_index = (annotated_frames_index + 1) % FRAME_COUNT # index of next annotated frame for next loop iteration
 
             if self.camera.wait_key_press('q', delay=10): # if the user presses 'q', we quit the program.
                 print("Exiting program.")

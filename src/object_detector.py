@@ -114,7 +114,7 @@ class ObjectDetector:
     # ------------------------------------------------------------------
     # Tracking helpers (per-model)
     # ------------------------------------------------------------------
-    def _track_single(self, model: YOLO, frame: np.ndarray, persist: bool = True, objects: list[str] = None):
+    def _track_single(self, model: YOLO, frame: list[np.ndarray], persist: bool = True, objects: list[str] = None):
         """
         Run tracking on a single model and return the first Results object.
         If the objects parameter is provided, this only returns detections for the class ids that correspond to the contents of objects.
@@ -165,7 +165,7 @@ class ObjectDetector:
     # ------------------------------------------------------------------
     def detect(
         self,
-        frame: np.ndarray,
+        frame: list[np.ndarray],
         annotate: bool = False,
         objects: list[str] = None
     ) -> Tuple[List[Dict], np.ndarray]:
@@ -221,7 +221,7 @@ class ObjectDetector:
 
         # ---------- annotation ----------
         if annotate:
-            annotated_frame = self._annotate_frame(frame.copy(), all_detections)
+            annotated_frame = self._annotate_frame(frame[0].copy(), all_detections)
         else:
             annotated_frame = frame
 
