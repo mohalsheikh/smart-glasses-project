@@ -23,9 +23,10 @@ from src.utils.object_description import summarize_detections, format_ocr_feedba
 import threading
 from queue import Queue
 from collections import deque
+import numpy as np
 import enum
 
-FRAME_COUNT = 3 # the number of frames provided to objectdetector and ocrengine for detection and reading.
+FRAME_COUNT = 5 # the number of frames provided to objectdetector and ocrengine for detection and reading.
 
 class VoiceInputState(enum.Enum):
     WAITING_FOR_WAKE_WORD = 1,
@@ -111,30 +112,29 @@ class MainController:
 
     # determines action to take based on the value of command, and returns a natural language description of the result to be spoken to the user.
     # objs is the list of objects that we want to process. If it is none, we are processing all objects that the ObjectDetector knows.
-    def _route_command(self, command: str, cleaned_transcript: str, frame, objs: list[str] = None) -> str:
-        final_frame = None
+    def _route_command(self, command: str, cleaned_transcript: str, frames: list[np.ndarray], objs: list[str] = None):
+        final_frames = None
         match command:
 ##############################################################################################################
 # # Action commands
 ##############################################################################################################  
-            #TODO replace frame parameter with list of frames when we start capturing multiple... [frame] is just here to test detecting from a list.
             case "detect":
-                detections, final_frame = self.detector.detect([frame], annotate=True, objects=objs) # detect objects and get annotated frame
-                description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections in natural language
+                detections, final_frames = self.detector.detect(frames, annotate=True, objects=objs) # detect objects and get annotated frame
+                description = summarize_detections(detections[0], frame_width=self.camera_frame_width) # describe detections in natural language TODO detections[0] placeholder
             case "read": 
-                detections, final_frame = self.detector.detect([frame], annotate=True, objects=objs) # detect objects and get annotated frame
-                detections = self.ocr.attach_crop_text_to_detected_objects(frame, detections) # read text on objects
+                detections, final_frames = self.detector.detect(frames, annotate=True, objects=objs) # detect objects and get annotated frame
+                detections = self.ocr.attach_crop_text_to_detected_objects(frames[0], detections) # read text on objects (TODO frames[0] placeholder)
 
                 self._print_ocr_feedback(detections)
 
                 detections = [det for det in detections if det.get("ocr_text")] # filter to just objects with text
-                description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections of objects with text in natural language
+                description = summarize_detections(detections[0], frame_width=self.camera_frame_width) # describe detections of objects with text in natural language TODO detections[0] placeholder
 ##############################################################################################################
 # # Quit commands
 ##############################################################################################################       
             case "sleep" | "end" | "nevermind" | "thanks":
                 description = "Wow, okay bro. I'm going to sleep then."
-                final_frame = frame.copy() if frame is not None else None
+                final_frames = frames.copy() if frames else None
                 print("🛑 Vision system entered sleep mode.")
 ##############################################################################################################
 # # Default
@@ -151,12 +151,12 @@ class MainController:
 
                 command = transcript_with_command.split()[0]
                 if command in self.commands and not len(objs_to_process) == 0: 
-                    description, final_frame = self._route_command(command, cleaned_transcript, frame, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
+                    description, final_frames = self._route_command(command, cleaned_transcript, frames, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
                 else:
                     description = f"Sorry, I didn't understand the command. I heard '{cleaned_transcript}'."
-                    final_frame = frame.copy() if frame is not None else None
+                    final_frames = frames.copy() if frames is not None else None
 
-        return description, final_frame
+        return description, final_frames # TODO placeholder
 
     # helper to clean up Vosk's unknown token from results.
     # We replace it with empty string and then strip whitespace. "[unk]" becomes "", something like "detect [unk]" becomes "detect". 
@@ -232,7 +232,7 @@ class MainController:
         
         # list of annotations from most recent detections, shown in detections window.
         # initialized to the initial FRAME_COUNT unannotated frames
-        annotated_frames = list(frames)
+        annotated_frames: list[np.ndarray] = list(frames)
 
         annotated_frames_index = 0 # index of the annotated frame to show in the detections window
 
@@ -291,13 +291,11 @@ class MainController:
                             self.speech_queue.put("Sorry, I didn't catch that.")
                             continue
 
-                        frame = self.camera.capture_frame() # capture a new frame from the camera to process for this command
-
                         # command routing determines what action to take based on the transcript.
                         split_transcript = cleaned_transcript.split()
                         last_word = split_transcript[-1] # We assume the command is the last_word in the cleaned transcript... if it isn't, it is likely an object name that the user wants to detect/read.
 
-                        description, annotated_frame = self._route_command(last_word, cleaned_transcript, frame)
+                        description, annotated_frames = self._route_command(last_word, cleaned_transcript, frames)
                         # self.frame_queue.put(annotated_frame) # put the annotated frame in the queue for the display thread to show
                     
                         # self.speech.speak(description)

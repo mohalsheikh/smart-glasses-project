@@ -62,13 +62,13 @@ class ObjectDetector:
         self.max_det = max_det
 
         # ---------- build the list of model paths ----------
-        paths: List[str] = []
+        self.paths: List[str] = []
         if model_names is not None:
-            paths.extend(model_names)
-        if model_name is not None and model_name not in paths:
-            paths.insert(0, model_name)
+            self.paths.extend(model_names)
+        if model_name is not None and model_name not in self.paths:
+            self.paths.insert(0, model_name)
 
-        if len(paths) == 0:
+        if len(self.paths) == 0:
             raise ValueError("No model paths provided.")
 
         # ---------- load models and construct name to id converter and label demerger ----------
@@ -81,7 +81,7 @@ class ObjectDetector:
         # for instance, an example entry may be: {"currency_detector.pt": {"one dollar bill" : [class id of one-front, class id of one-back]}}
         self._demerge: dict[YOLO, dict[str, list[int]]] = dict() 
 
-        for path in paths:
+        for path in self.paths:
             # load model w/ YOLO constructor and add to _models
             try:
                 model = YOLO(path)
@@ -109,12 +109,12 @@ class ObjectDetector:
                     else: # append to list if dict entry does exist
                         curr_model_demerge[normalized_label].append(id)
 
-        print(f"[ObjectDetector] Loaded {len(self._models)} model(s): {paths}")
+        print(f"[ObjectDetector] Loaded {len(self._models)} model(s): {self.paths}")
 
     # ------------------------------------------------------------------
     # Tracking helpers (per-model)
     # ------------------------------------------------------------------
-    def _track_single(self, model: YOLO, frame: list[np.ndarray], persist: bool = True, objects: list[str] = None):
+    def _track_single_model(self, model: YOLO, frames: list[np.ndarray], persist: bool = True, objects: list[str] = None):
         """
         Run tracking on a single model and return the first Results object.
         If the objects parameter is provided, this only returns detections for the class ids that correspond to the contents of objects.
@@ -144,8 +144,8 @@ class ObjectDetector:
             # class ids is none if objects is None (track will track all classes)
             class_ids = None
 
-        return model.track(
-            source=frame,
+        return [ model.track(
+            source=frames[i],
             persist=persist,
             conf=self.conf,
             iou=self.iou,
@@ -154,7 +154,7 @@ class ObjectDetector:
             max_det=self.max_det,
             verbose=False,
             classes=class_ids
-        )[0]
+        )[0] for i in range(len(frames)) ]
 
     @staticmethod
     def _tensor_to_numpy_array(obj):
@@ -165,7 +165,7 @@ class ObjectDetector:
     # ------------------------------------------------------------------
     def detect(
         self,
-        frame: list[np.ndarray],
+        frames: list[np.ndarray],
         annotate: bool = False,
         objects: list[str] = None
     ) -> Tuple[List[Dict], np.ndarray]:
@@ -173,59 +173,65 @@ class ObjectDetector:
         Run all loaded models on *frame*, merge detections, and return them.
 
         Returns:
-            (detections, output_frame)
+            (detections, output_frames)
             - detections: list of dicts with keys
               label, confidence, bbox, center, track_id, model_index
-            - output_frame: annotated frame if *annotate* is True,
-              otherwise the original frame.
+            - output_frames: list of annotated frames if *annotate* is True,
+              otherwise the original frames.
         """
-        all_detections: List[Dict] = []
+        # all detections from all models for each frame
+        all_detections: List[List[Dict]] = [[] for _ in range(len(frames))]
 
         for model_idx, model in enumerate(self._models):
-            # try:
-            track_result = self._track_single(model, frame, objects=objects)
-            # except Exception as e:
-            #     raise RuntimeError(
-            #         f"Tracking failed on model {model_idx} with exception: {e}"
-            #     )
-
-            track_result_boxes = getattr(track_result, "boxes", None)
-            if track_result_boxes is None:
-                continue
-
-            xyxy = self._tensor_to_numpy_array(track_result_boxes.xyxy)
-            if xyxy is None or xyxy.size == 0:
-                continue
-
-            center = (xyxy[:, :2] + xyxy[:, 2:]) / 2
-            conf = self._tensor_to_numpy_array(track_result_boxes.conf).astype(float)
-            cls = self._tensor_to_numpy_array(track_result_boxes.cls).astype(int)
-            ids = self._tensor_to_numpy_array(
-                getattr(track_result_boxes, "id", None)
-            )
-            labels = [model.names.get(c, f"class_{c}") for c in cls]
-
-            for i in range(len(xyxy)):
-                all_detections.append(
-                    {
-                        "label": labels[i],
-                        "confidence": conf[i],
-                        "bbox": tuple(xyxy[i]),
-                        "center": tuple(center[i]),
-                        "track_id": (
-                            int(ids[i]) if ids is not None and i < len(ids) else None
-                        ),
-                        "model_index": model_idx,
-                    }
+            try:
+                track_results = self._track_single_model(model, frames, objects=objects)
+            except Exception as e:
+                raise RuntimeError(
+                    f"Tracking failed on model {model_idx} with exception: {e}"
                 )
+
+            # extract detections from current model from track_results, add detections from each frameto all_detections
+            for i, track_result in enumerate(track_results):
+                track_result_boxes = getattr(track_result, "boxes", None)
+                if track_result_boxes is None:
+                    continue
+
+                xyxy = self._tensor_to_numpy_array(track_result_boxes.xyxy)
+                if xyxy is None or xyxy.size == 0:
+                    continue
+
+                center = (xyxy[:, :2] + xyxy[:, 2:]) / 2
+                conf = self._tensor_to_numpy_array(track_result_boxes.conf).astype(float)
+                cls = self._tensor_to_numpy_array(track_result_boxes.cls).astype(int)
+                ids = self._tensor_to_numpy_array(
+                    getattr(track_result_boxes, "id", None)
+                )
+                labels = [model.names.get(c, f"class_{c}") for c in cls]
+
+                for j in range(len(xyxy)):
+                    all_detections[i].append(
+                        {
+                            "label": labels[j],
+                            "confidence": conf[j],
+                            "bbox": tuple(xyxy[j]),
+                            "center": tuple(center[j]),
+                            "track_id": (
+                                int(ids[j]) if ids is not None and j < len(ids) else None
+                            ),
+                            "model_index": model_idx,
+                        }
+                    )
+                
+            # reset model to reset track ids for next detection run
+            model = YOLO(self.paths[model_idx])
 
         # ---------- annotation ----------
         if annotate:
-            annotated_frame = self._annotate_frame(frame[0].copy(), all_detections)
+            annotated_frames = [self._annotate_frame(frames[i].copy(), all_detections[i]) for i in range(len(frames))]
         else:
-            annotated_frame = frame
+            annotated_frames = frames.copy()
 
-        return all_detections, annotated_frame
+        return all_detections, annotated_frames
 
     # ------------------------------------------------------------------
     # Simple annotation that works across multiple models
