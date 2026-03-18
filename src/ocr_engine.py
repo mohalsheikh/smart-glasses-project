@@ -104,7 +104,7 @@ class OCREngine:
             })
         return results
 ############################################################################################
-    def extract_text_as_string(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> str:
+    def extract_text_as_string(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> str | None:
         """
         Extracts all text from image and returns a single readable string.
         Filters by minimum confidence and sorts in reading order (top to bottom, left to right).
@@ -129,7 +129,7 @@ class OCREngine:
         if best_text:
             return best_text
         print("[OCR] no candidates produced filtered text")
-        return ""
+        return None
 ############################################################################################
     def extract_text_with_confidence(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> Dict[str, Any]:
         """
@@ -176,7 +176,11 @@ class OCREngine:
             # OCR is run only on this cropped image, not the full frame.
             crop = frame[coords[1]:coords[3], coords[0]:coords[2]] 
 
-            det["ocr_text"] = self.extract_text_as_string(crop, min_conf=min_conf)
-            
+            # runs OCR on the crop and gets the extracted text as a string.
+            # if the crop has text that meets the min_conf threshold, it is added to the detection dict under the "ocr_text" key.
+            text_extraction = self.extract_text_as_string(crop, min_conf=min_conf)
+            if text_extraction is not None:
+                det["ocr_text"] = text_extraction
+
         return detections
 ############################################################################################

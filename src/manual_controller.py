@@ -123,11 +123,12 @@ class MainController:
                 description = summarize_detections(detections[0], frame_width=self.camera_frame_width) # describe detections in natural language TODO detections[0] placeholder
             case "read": 
                 detections, final_frames = self.detector.detect(frames, annotate=True, objects=objs) # detect objects and get annotated frame
-                detections = self.ocr.attach_crop_text_to_detected_objects(frames[0], detections) # read text on objects (TODO frames[0] placeholder)
+                detections = [self.ocr.attach_crop_text_to_detected_objects(frames[i], det) for i, det in enumerate(detections)] # read text on objects
 
-                self._print_ocr_feedback(detections)
+                for i, det in enumerate(detections): # print OCR feedback for each detected object in a readable format TODO detections[0] placeholder
+                    self._print_ocr_feedback(det)
+                    detections[i] = [d for d in det if d.get("ocr_text") is not None] # filter to just objects with text for description
 
-                detections = [det for det in detections if det.get("ocr_text")] # filter to just objects with text
                 description = summarize_detections(detections[0], frame_width=self.camera_frame_width) # describe detections of objects with text in natural language TODO detections[0] placeholder
 ##############################################################################################################
 # # Quit commands
