@@ -26,7 +26,7 @@ from collections import deque
 import numpy as np
 import enum
 
-FRAME_COUNT = 5 # the number of frames provided to objectdetector and ocrengine for detection and reading.
+FRAME_COUNT = 3 # the number of frames provided to objectdetector and ocrengine for detection and reading.
 
 class VoiceInputState(enum.Enum):
     WAITING_FOR_WAKE_WORD = 1,
@@ -133,9 +133,8 @@ class MainController:
 # # Quit commands
 ##############################################################################################################       
             case "sleep" | "end" | "nevermind" | "thanks":
-                description = "Wow, okay bro. I'm going to sleep then."
+                description = "Going back to sleep..."
                 final_frames = frames.copy() if frames else None
-                print("🛑 Vision system entered sleep mode.")
 ##############################################################################################################
 # # Default
 ############################################################################################################## 
