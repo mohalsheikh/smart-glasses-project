@@ -125,8 +125,8 @@ class MainController:
                 detections, final_frames = self.detector.detect(frames, annotate=True, objects=objs) # detect objects and get annotated frame
                 detections = [self.ocr.attach_crop_text_to_detected_objects(frames[i], det) for i, det in enumerate(detections)] # read text on objects
 
-                for i, det in enumerate(detections): # print OCR feedback for each detected object in a readable format TODO detections[0] placeholder
-                    self._print_ocr_feedback(det)
+                for i, det in enumerate(detections): 
+                    self._print_ocr_feedback(det) # print OCR feedback for each detected object in a readable format
                     detections[i] = [d for d in det if d.get("ocr_text") is not None] # filter to just objects with text for description
 
                 description = summarize_detections(detections[0], frame_width=self.camera_frame_width) # describe detections of objects with text in natural language TODO detections[0] placeholder
@@ -156,7 +156,7 @@ class MainController:
                     description = f"Sorry, I didn't understand the command. I heard '{cleaned_transcript}'."
                     final_frames = frames.copy() if frames is not None else None
 
-        return description, final_frames # TODO placeholder
+        return description, final_frames
 
     # helper to clean up Vosk's unknown token from results.
     # We replace it with empty string and then strip whitespace. "[unk]" becomes "", something like "detect [unk]" becomes "detect". 

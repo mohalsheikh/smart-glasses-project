@@ -116,7 +116,7 @@ class ObjectDetector:
     # ------------------------------------------------------------------
     def _track_single_model(self, model: YOLO, frames: list[np.ndarray], persist: bool = True, objects: list[str] = None):
         """
-        Run tracking on a single model and return the first Results object.
+        Run tracking on a single model and return the first Results object, or none if the current model does not know of any classes in objects (if objects is provided).
         If the objects parameter is provided, this only returns detections for the class ids that correspond to the contents of objects.
         """
         class_ids: list[int] = []
@@ -182,6 +182,7 @@ class ObjectDetector:
         # all detections from all models for each frame
         all_detections: List[List[Dict]] = [[] for _ in range(len(frames))]
 
+        # run tracking on each frame with each model and merge results into all_detections.
         for model_idx, model in enumerate(self._models):
             try:
                 track_results = self._track_single_model(model, frames, objects=objects)
@@ -189,10 +190,16 @@ class ObjectDetector:
                 raise RuntimeError(
                     f"Tracking failed on model {model_idx} with exception: {e}"
                 )
+            
+            # if track_results is None, this means that the current model does not know of any classes in objects (if objects is provided), 
+            # so in that case we skip this model and move on to the next one.
+            if track_results is None:
+                continue
 
             # extract detections from current model from track_results, add detections from each frameto all_detections
             for i, track_result in enumerate(track_results):
                 track_result_boxes = getattr(track_result, "boxes", None)
+                
                 if track_result_boxes is None:
                     continue
 
