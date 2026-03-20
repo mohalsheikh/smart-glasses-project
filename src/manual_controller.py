@@ -60,7 +60,11 @@ class MainController:
                 normalized_names.add(norm)
 
         self.class_names = list(normalized_names)
-        self.class_names.sort(key=lambda s: s.count(" "), reverse=True) # sort class names by number of words from greatest to least (determined by counting spaces)
+
+        # sort class names by number of words from greatest to least (determined by counting spaces).
+        # this is done to ensure that when we do partial matching of class names in the transcript, we check for longer class names first (therefore they are matched first).
+        # for instance if a hypothetical model knew "cell phone" and "phone", and the user said "detect cell phone", we match "cell phone" instead of phone.
+        self.class_names.sort(key=lambda s: s.count(" "), reverse=True) 
 
         # set of all individual words that appear in (normalized) class names, used for partial matching of class names in voice commands.
         self.partial_class_names = {word for name in self.class_names for word in name.split()} 
@@ -135,7 +139,7 @@ class MainController:
 ##############################################################################################################       
             case "sleep" | "end" | "nevermind" | "thanks":
                 description = "Going back to sleep..."
-                final_frames = frames.copy() if frames else None
+                final_frames = frames.copy() if frames is not None else None
 ##############################################################################################################
 # # Default
 ############################################################################################################## 

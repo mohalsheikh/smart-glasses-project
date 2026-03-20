@@ -104,7 +104,7 @@ class OCREngine:
             })
         return results
 ############################################################################################
-    def extract_text_as_string(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> str | None:
+    def extract_text_as_string(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE):
         """
         Extracts all text from image and returns a single readable string.
         Filters by minimum confidence and sorts in reading order (top to bottom, left to right).
@@ -112,6 +112,7 @@ class OCREngine:
         """
         best_text = ""
         best_score = -1.0  # higher is better
+        best_avg_conf = 0.0
         for i, candidate in enumerate(preprocessing.deskew_image(image), start=1):
             results = self._extract_text(candidate)
             filtered = self._filter_and_sort_results(results, min_conf)
@@ -126,10 +127,11 @@ class OCREngine:
             if score > best_score:
                 best_score = score
                 best_text = text
+                best_avg_conf = metrics["avg_conf"]
         if best_text:
-            return best_text
+            return best_text, best_avg_conf
         print("[OCR] no candidates produced filtered text")
-        return None
+        return None, 0.0
 ############################################################################################
     def extract_text_with_confidence(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> Dict[str, Any]:
         """
@@ -178,9 +180,10 @@ class OCREngine:
 
             # runs OCR on the crop and gets the extracted text as a string.
             # if the crop has text that meets the min_conf threshold, it is added to the detection dict under the "ocr_text" key.
-            text_extraction = self.extract_text_as_string(crop, min_conf=min_conf)
+            text_extraction, avg_conf = self.extract_text_as_string(crop, min_conf=min_conf)
             if text_extraction is not None:
                 det["ocr_text"] = text_extraction
+                det["ocr_avg_confidence"] = avg_conf
 
         return detections
 ############################################################################################

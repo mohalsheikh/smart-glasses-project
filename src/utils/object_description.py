@@ -135,7 +135,7 @@ def pluralize(label: str, count: int) -> str:
 #     return words.get(count, str(count))
 
 def summarize_detections(
-    detections: List[Dict[str, Any]],
+    detections_lists: List[List[Dict[str, Any]]],
     frame_width: int,
     max_items: int = MAX_SPEECH_ITEMS,
 ) -> str:
@@ -143,52 +143,64 @@ def summarize_detections(
     Summarizes detections into a natural language description.
 
     Args:
-        detections: List of detection dicts from object detector.
+        detections_lists: List of lists of detection dicts from object detector.
         frame_width: Width of the camera frame for direction estimation
         max_items: Maximum number of objects to include in the summary
     
     Returns:
         Natural language description of detected objects and their directions.
     """
-    filtered_detections = _format_detections(detections, frame_width, max_items)
+    filtered_detections = _format_detections(detections_lists, frame_width, max_items)
 
     if not filtered_detections:
         return "I don't see any objects clearly."
     else:
         return _construct_description(filtered_detections)
-    
+
 
 def _format_detections(
-    detections: List[Dict[str, Any]],
+    detections_lists: List[List[Dict[str, Any]]],
     frame_width: int,
     max_items: int = MAX_SPEECH_ITEMS,
 ) -> List[Dict[str, Optional[str]]] | None:
     """
     Formats detections into a list of dicts with label, direction, and ocr_text if it is present, which is to be used for summarization.
     """
-    # Filter by adaptive confidence
-    filtered = []
 
-    for d in detections:
-        raw_label = d.get("label")
-        normalized_label = normalize_label(raw_label)
+    # used to hold filtered detections from each frame, which will be condensed into a single list describing detections across all frames 
+    filtered_detections = []
 
-        # continue to next detection if this one is empty or should be ignored.
-        if normalized_label is None: 
-            continue
+    for detections_list in detections_lists:
+        # Filter by adaptive confidence
+        filtered = []
 
-        conf = float(d.get("confidence", 0.0))
-        required_conf = get_confidence_threshold(normalized_label)
+        for d in detections_list:
+            raw_label = d.get("label")
+            normalized_label = normalize_label(raw_label)
 
-        if conf >= required_conf:
-            filtered.append({
-                "label": normalized_label,
-                "confidence": conf,
-                "center": d.get("center"),
-                "ocr_text": d.get("ocr_text"),
-            })
+            # continue to next detection if this one is empty or should be ignored.
+            if normalized_label is None: 
+                continue
 
-    if len(filtered) == 0:
+            conf = float(d.get("confidence", 0.0))
+            required_conf = get_confidence_threshold(normalized_label)
+
+            if conf >= required_conf:
+                filtered.append({
+                    "label": normalized_label,
+                    "confidence": conf,
+                    "bbox": d.get("bbox"),
+                    "center": d.get("center"),
+                    "track_id": d.get("track_id"),
+                    "ocr_text": d.get("ocr_text"),
+                    "ocr_avg_confidence": d.get("ocr_avg_confidence")
+                })
+
+            filtered_detections.extend(filtered)
+
+    filtered_detections = _condense_detections(filtered_detections)
+
+    if len(filtered_detections) == 0:
         return None
 
     # Sort by confidence; priority first, and highest to lowest
@@ -210,6 +222,10 @@ def _format_detections(
     ]
 
     return filtered
+
+# TODO
+def _condense_detections(filtered_detections: List[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    pass
 
 def _construct_description(filtered_detections: List[Dict[str, Optional[str]]]) -> str:
     """Constructs a natural language description from the filtered detections.

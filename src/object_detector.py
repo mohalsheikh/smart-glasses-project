@@ -215,6 +215,7 @@ class ObjectDetector:
                 )
                 labels = [model.names.get(c, f"class_{c}") for c in cls]
 
+                print(f"FRAME {i} - MODEL {model_idx}")
                 for j in range(len(xyxy)):
                     all_detections[i].append(
                         {
@@ -222,12 +223,12 @@ class ObjectDetector:
                             "confidence": conf[j],
                             "bbox": tuple(xyxy[j]),
                             "center": tuple(center[j]),
-                            "track_id": (
-                                int(ids[j]) if ids is not None and j < len(ids) else None
-                            ),
+                            "track_id": f"{model_idx}.{int(ids[j])}" if ids is not None and j < len(ids) else f"{model_idx}.N/A", # prefixed w/ model idx to ensure global uniqueness across models
                             "model_index": model_idx,
                         }
                     )
+
+                    print(f"[ObjectDetector] Model {model_idx} detected {labels[j]} with confidence {conf[j]:.2f} at {xyxy[j]} (track_id: {ids[j] if ids is not None and j < len(ids) else 'N/A'})")
                 
             # reset model to reset track ids for next detection run
             model = YOLO(self.paths[model_idx])
