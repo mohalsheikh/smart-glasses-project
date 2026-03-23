@@ -38,6 +38,14 @@ def gray_to_rgb(image):
 def hsv_to_rgb(image):
     return cv.cvtColor(image, cv.COLOR_HSV2RGB)
 
+# Convert a BGR image to RGB.
+def bgr_to_rgb(image):
+    return cv.cvtColor(image, cv.COLOR_BGR2RGB)
+
+# Convert a RGB image to BGR.
+def rgb_to_bgr(image):
+    return cv.cvtColor(image, cv.COLOR_RGB2BGR)
+
 # Sharpen an image.
 def sharpen_image(
         image, 
