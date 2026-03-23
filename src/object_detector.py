@@ -223,12 +223,12 @@ class ObjectDetector:
                             "confidence": conf[j],
                             "bbox": tuple(xyxy[j]),
                             "center": tuple(center[j]),
-                            "track_id": f"{model_idx}.{int(ids[j])}" if ids is not None and j < len(ids) else f"{model_idx}.N/A", # prefixed w/ model idx to ensure global uniqueness across models
+                            "track_id": f"{model_idx}.{int(ids[j])}" if ids is not None and j < len(ids) else "N/A",
                             "model_index": model_idx,
                         }
                     )
 
-                    print(f"[ObjectDetector] Model {model_idx} detected {labels[j]} with confidence {conf[j]:.2f} at {xyxy[j]} (track_id: {ids[j] if ids is not None and j < len(ids) else 'N/A'})")
+                    print(f"[ObjectDetector] Model {model_idx} detected {labels[j]} with confidence {conf[j]:.2f} at {xyxy[j]} (track_id: {all_detections[i][-1]['track_id']})")
                 
             # reset model to reset track ids for next detection run
             model = YOLO(self.paths[model_idx])
