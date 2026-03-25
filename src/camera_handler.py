@@ -52,14 +52,14 @@ class CameraHandler:
             raise RuntimeError(f"Could not open camera {camera_index} with OpenCV.") # error
 
         # test frame capture to detect if camera is actually usable (catches "in use by another app" scenarios)
-        ret, test_frame = self.cap.read()
-        if not ret or test_frame is None:
-            self.cap.release()
-            raise RuntimeError(
-                f"Camera {camera_index} opened but cannot read frames. "
-                "It may be in use by another application or have driver issues. "
-                "Please check that no other applications are using the camera.\n"
-            )
+        # ret, test_frame = self.cap.read()
+        # if not ret or test_frame is None:
+        #     self.cap.release()
+        #     raise RuntimeError(
+        #         f"Camera {camera_index} opened but cannot read frames. "
+        #         "It may be in use by another application or have driver issues. "
+        #         "Please check that no other applications are using the camera.\n"
+        #     )
 
         # setting capture width and height
         self.cap.set(cv.CAP_PROP_FRAME_WIDTH, frame_width)
