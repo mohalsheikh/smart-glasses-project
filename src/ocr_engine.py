@@ -104,32 +104,173 @@ class OCREngine:
             })
         return results
 ############################################################################################
+    # def extract_text_as_string(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> str:
+    #     """
+    #     Extracts all text from image and returns a single readable string.
+    #     Filters by minimum confidence and sorts in reading order (top to bottom, left to right).
+    #     Tries 4 deskew candidates and returns the best one.
+    #     """
+    #     best_text = ""
+    #     best_score = -1.0  # higher is better
+    #     preprocessed = preprocessing.gaussian_blur(image)
+    #     preprocessed = preprocessing.enhance_contrast_clahe(preprocessed)
+    #     preprocessed = preprocessing.sharpen_image(preprocessed)
+    #     for i, candidate in enumerate(preprocessing.deskew_image(preprocessed), start=1):
+    #         results = self._extract_text(candidate)
+    #         filtered = self._filter_and_sort_results(results, min_conf)
+    #         print(f"[OCR] deskew candidate {i}: raw={len(results)} filtered={len(filtered)}")
+    #         if not filtered:
+    #             continue
+    #         # Uses confidence helper to score
+    #         metrics = self._annotate_confidence(filtered)  # avg_conf, min_conf, count
+    #         text = self._join_text(filtered)
+    #         score = metrics["count"] + metrics["avg_conf"]
+    #         print(f"[OCR] candidate {i} score={score:.3f} text: {text}")
+    #         if score > best_score:
+    #             best_score = score
+    #             best_text = text
+    #     if best_text:
+    #         return best_text
+    #     print("[OCR] no candidates produced filtered text")
+    #     return ""
+
     def extract_text_as_string(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> str:
         """
         Extracts all text from image and returns a single readable string.
         Filters by minimum confidence and sorts in reading order (top to bottom, left to right).
         Tries 4 deskew candidates and returns the best one.
         """
+
+        def _to_bgr(img):
+            if len(img.shape) == 2:
+                return cv.cvtColor(img, cv.COLOR_GRAY2BGR)
+            return img.copy()
+
+        def _label(img, text):
+            out = _to_bgr(img)
+            cv.putText(
+                out,
+                text,
+                (10, 25),
+                cv.FONT_HERSHEY_SIMPLEX,
+                0.7,
+                (0, 255, 0),
+                2,
+                cv.LINE_AA
+            )
+            return out
+
+        def _fit_in_cell(img, cell_w=420, cell_h=280, bg=(30, 30, 30)):
+            img = _to_bgr(img)
+            h, w = img.shape[:2]
+
+            scale = min(cell_w / w, cell_h / h)
+            new_w = max(1, int(w * scale))
+            new_h = max(1, int(h * scale))
+
+            resized = cv.resize(img, (new_w, new_h))
+
+            canvas = np.full((cell_h, cell_w, 3), bg, dtype=np.uint8)
+
+            x = (cell_w - new_w) // 2
+            y = (cell_h - new_h) // 2
+            canvas[y:y+new_h, x:x+new_w] = resized
+
+            return canvas
+        
+        def _add_border(img, pad=10):
+            return cv.copyMakeBorder(
+                img,
+                pad, pad, pad, pad,
+                cv.BORDER_CONSTANT,
+                value=(40, 40, 40)  # dark gray spacing
+            )
+
+        def _make_grid(images, cols=2):
+            rows = []
+            for i in range(0, len(images), cols):
+                row = images[i:i+cols]
+                rows.append(cv.hconcat(row))
+            return cv.vconcat(rows)
+
         best_text = ""
-        best_score = -1.0  # higher is better
-        for i, candidate in enumerate(preprocessing.deskew_image(image), start=1):
+        best_score = -1.0
+        best_candidate = None
+
+        # ===== preprocessing stages =====
+        stage0 = image.copy()
+        stage1 = preprocessing.gaussian_blur(stage0)
+        stage2 = preprocessing.enhance_contrast_clahe(stage1)
+        stage3 = preprocessing.sharpen_image(stage2)
+
+        candidates = list(preprocessing.deskew_image(stage3))
+
+        for i, candidate in enumerate(candidates, start=1):
             results = self._extract_text(candidate)
             filtered = self._filter_and_sort_results(results, min_conf)
             print(f"[OCR] deskew candidate {i}: raw={len(results)} filtered={len(filtered)}")
+
             if not filtered:
                 continue
-            # Uses confidence helper to score
-            metrics = self._annotate_confidence(filtered)  # avg_conf, min_conf, count
+
+            metrics = self._annotate_confidence(filtered)
             text = self._join_text(filtered)
             score = metrics["count"] + metrics["avg_conf"]
             print(f"[OCR] candidate {i} score={score:.3f} text: {text}")
+
             if score > best_score:
                 best_score = score
                 best_text = text
+                best_candidate = candidate.copy()
+
+        # ===== build one debug collage =====
+        top_row = [
+            _add_border(_label(stage0, "0 Original")),
+            _add_border(_label(stage1, "1 Blur")),
+            _add_border(_label(stage2, "2 CLAHE")),
+            _add_border(_label(stage3, "3 Sharpen")),
+        ]
+
+        top_row = [_fit_in_cell(img, cell_w=420, cell_h=280) for img in top_row]
+        top_strip = _make_grid(top_row, cols=2)
+
+        bottom_imgs = []
+        for i, cand in enumerate(candidates, start=1):
+            tag = f"Deskew {i}"
+            if best_candidate is not None and np.array_equal(cand, best_candidate):
+                tag += " (BEST)"
+            bottom_imgs.append(_add_border(_label(cand, tag)))
+
+        bottom_imgs = [_fit_in_cell(img, cell_w=420, cell_h=280) for img in bottom_imgs]
+
+        if bottom_imgs:
+            bottom_strip = _make_grid(bottom_imgs, cols=2)
+            collage = cv.vconcat([top_strip, bottom_strip])
+        else:
+            collage = top_strip
+
+        collage = cv.copyMakeBorder(
+            collage, 20, 20, 20, 20,
+            cv.BORDER_CONSTANT,
+            value=(20, 20, 20)
+        )
+
+        cv.namedWindow("OCR Preprocessing Debug", cv.WINDOW_NORMAL)
+        cv.resizeWindow("OCR Preprocessing Debug", 1600, 900)
+
+        scale = 1.5
+        h, w = collage.shape[:2]
+        collage_resized = cv.resize(collage, (int(w * scale), int(h * scale)))
+
+        cv.imshow("OCR Preprocessing Debug", collage_resized)
+        cv.waitKey(1)
+
         if best_text:
             return best_text
+
         print("[OCR] no candidates produced filtered text")
         return ""
+
 ############################################################################################
     def extract_text_with_confidence(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> Dict[str, Any]:
         """
