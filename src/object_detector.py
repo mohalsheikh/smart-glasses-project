@@ -37,7 +37,7 @@ class ObjectDetector:
         iou: float = 0.45,
         imgsz: int = DEFAULT_FRAME_WIDTH if DEFAULT_FRAME_WIDTH > DEFAULT_FRAME_HEIGHT else DEFAULT_FRAME_HEIGHT,
         tracker: str = "bytetrack.yaml",
-        max_det: int = 100,
+        max_det: int = 100
     ):
         # ---------- validate params ----------
         if model_name is None and model_names is None:
@@ -217,18 +217,23 @@ class ObjectDetector:
 
                 print(f"FRAME {i} - MODEL {model_idx}")
                 for j in range(len(xyxy)):
-                    all_detections[i].append(
-                        {
-                            "label": labels[j],
-                            "confidence": conf[j],
-                            "bbox": tuple(xyxy[j]),
-                            "center": tuple(center[j]),
-                            "track_id": f"{model_idx}.{int(ids[j])}" if ids is not None and j < len(ids) else "N/A",
-                            "model_index": model_idx,
-                        }
-                    )
+                    valid_id = ids is not None and j < len(ids)
 
-                    print(f"[ObjectDetector] Model {model_idx} detected {labels[j]} with confidence {conf[j]:.2f} at {xyxy[j]} (track_id: {all_detections[i][-1]['track_id']})")
+                    if len(frames) == 1 or valid_id:
+                        all_detections[i].append(
+                            {
+                                "label": labels[j],
+                                "confidence": conf[j],
+                                "bbox": tuple(xyxy[j]),
+                                "center": tuple(center[j]),
+                                "track_id": f"{model_idx}.{int(ids[j])}" if valid_id else "N/A",
+                                "model_index": model_idx,
+                            }
+                        )
+
+                        print(f"[ObjectDetector] Model {model_idx} detected {labels[j]} with confidence {conf[j]:.2f} at {xyxy[j]} (track_id: {all_detections[i][-1]['track_id']})")
+                    else:
+                        print(f"[ObjectDetector] Model {model_idx} detected {labels[j]} with confidence {conf[j]:.2f} at {xyxy[j]} (track_id: N/A)")
                 
             # reset model to reset track ids for next detection run
             model = YOLO(self.paths[model_idx])

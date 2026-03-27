@@ -203,7 +203,7 @@ def _format_detections(
 
     # condense detections across frames into a single list describing unique detected objects.
     # print(f"[ObjDesc] Filtered detections for {len(filtered_detections_list)} frames: {filtered_detections_list} \n")
-    condensed_detections = _condense_detections(filtered_detections_list)
+    condensed_detections = _condense_detections(filtered_detections_list) if len(filtered_detections_list) != 1 else filtered_detections_list[0]
 
     # Sort by confidence; priority first, and highest to lowest
     condensed_detections.sort(key=lambda x: 
@@ -245,7 +245,7 @@ def _condense_detections(filtered_detections_list: List[List[Dict[str, Any]]]) -
         for d in merged_detections:
             curr_id = d.get("track_id")
 
-            if curr_id not in best_candidates_for_track_id:
+            if curr_id not in best_candidates_for_track_id and curr_id != 'N/A':
                 best_candidates_for_track_id[curr_id] = {
                     "label": d.get("label"),
                     "confidence": d.get("confidence", 0.0),
@@ -339,7 +339,7 @@ def _merge_detections(filtered_detections: List[Dict[str, Any]]) -> List[Dict[st
         del new_dets_for_track_ids_to_normalize[k]["bbox_area"] # remove from final output because it was just for calculation purposes
 
     # for track ids that were merged, remove all detections with those track ids from the original list and replace with the new merged detection for that track id.
-    merged_detections = [d for d in filtered_detections if d.get("track_id") not in track_ids_to_normalize and d.get("track_id") != 'N/A']
+    merged_detections = [d for d in filtered_detections if d.get("track_id") not in track_ids_to_normalize]
     merged_detections.extend(new_dets_for_track_ids_to_normalize.values())
     
     return merged_detections
