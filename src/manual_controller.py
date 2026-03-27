@@ -116,7 +116,7 @@ class MainController:
 
     # determines action to take based on the value of command, and returns a natural language description of the result to be spoken to the user.
     # objs is the list of objects that we want to process. If it is none, we are processing all objects that the ObjectDetector knows.
-    def _route_command(self, command: str, cleaned_transcript: str, frames: list[np.ndarray], objs: list[str] = None):
+    def _route_command(self, command: str, cleaned_transcript: str, frames: list[np.ndarray], prev_desc: str, objs: list[str] = None):
         final_frames = None
         match command:
 ##############################################################################################################
@@ -139,7 +139,13 @@ class MainController:
 ##############################################################################################################       
             case "sleep" | "end" | "nevermind" | "thanks":
                 description = "Going back to sleep..."
-                final_frames = frames.copy() if frames is not None else None
+                final_frames = None # frames.copy() if frames is not None else None
+##############################################################################################################
+# # Repeat commands
+##############################################################################################################   
+            case "repeat":
+                description = prev_desc
+                final_frames = None # frames.copy() if frames is not None else None
 ##############################################################################################################
 # # Default
 ############################################################################################################## 
@@ -158,7 +164,7 @@ class MainController:
                     description, final_frames = self._route_command(command, cleaned_transcript, frames, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
                 else:
                     description = f"Sorry, I didn't understand the command. I heard '{cleaned_transcript}'."
-                    final_frames = frames.copy() if frames is not None else None
+                    final_frames = None # frames.copy() if frames is not None else None
 
         return description, final_frames
 
@@ -241,6 +247,7 @@ class MainController:
         annotated_frames_index = 0 # index of the annotated frame to show in the detections window
 
         self._start_worker_threads() # start the display and speech worker threads
+        description = "I have nothing to repeat." # used to store spoken descriptions, saved across loops to support the "repeat" command.
 
         while True: # main loop
             # capturing a new frame and replacing the oldest frame in the frames deque with it
@@ -299,12 +306,14 @@ class MainController:
                         split_transcript = cleaned_transcript.split()
                         last_word = split_transcript[-1] # We assume the command is the last_word in the cleaned transcript... if it isn't, it is likely an object name that the user wants to detect/read.
 
-                        description, annotated_frames = self._route_command(last_word, cleaned_transcript, frames)
+                        results = self._route_command(last_word, cleaned_transcript, frames, description)
+                        description = results[0]
+                        annotated_frames = results[1] if results[1] is not None else annotated_frames
                         # self.frame_queue.put(annotated_frame) # put the annotated frame in the queue for the display thread to show
                     
                         # self.speech.speak(description)
                         self.speech_queue.put(description)
-                        print(f"Frame processed: {description}")
+                        print(f"Output: {description}")
 
             # wake_word_input = self.voice.listen_wake_word(timeout_seconds=8.0)
             # print(f"Wake word input: '{wake_word_input}'")  # Debug print for wake word input
