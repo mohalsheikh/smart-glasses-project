@@ -161,7 +161,7 @@ class MainController:
 
                 command = transcript_with_command.split()[0]
                 if command in self.commands and not len(objs_to_process) == 0: 
-                    description, final_frames = self._route_command(command, cleaned_transcript, frames, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
+                    description, final_frames = self._route_command(command, cleaned_transcript, frames, prev_desc, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
                 else:
                     description = f"Sorry, I didn't understand the command. I heard '{cleaned_transcript}'."
                     final_frames = None # frames.copy() if frames is not None else None
