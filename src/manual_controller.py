@@ -308,10 +308,8 @@ class MainController:
 
                         results = self._route_command(last_word, cleaned_transcript, frames, description)
                         description = results[0]
-                        annotated_frames = results[1] if results[1] is not None else annotated_frames
-                        # self.frame_queue.put(annotated_frame) # put the annotated frame in the queue for the display thread to show
-                    
-                        # self.speech.speak(description)
+                        annotated_frames = results[1] if results[1] is not None else annotated_frames # only updating frames if frames result from route command isn't None (i.e. if no new detections were called for).
+        
                         self.speech_queue.put(description)
                         print(f"Output: {description}")
 
