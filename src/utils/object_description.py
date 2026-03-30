@@ -18,7 +18,7 @@ SMALL_OBJECTS: set = {
 CONFIDENCE_BY_CATEGORY: dict = {
     "small_objects": 0.15,
     "priority_objects": 0.20,
-    "general_objects": 0.25,
+    "general_objects": 0.20, # 0.25,
 }
 
 # Ignore noisy labels
@@ -29,13 +29,28 @@ IGNORE_LABELS = {
 }
 
 # Merge similar labels
+# Currency labels are normalized so that both front and back variants
+# produce a clean spoken form like "five dollar bill".
 MERGE_LABELS = {
-    "Human face": "person", "Man": "person", "Woman": "person",
-    "Boy": "person", "Girl": "person", "Person": "person",
-    "Laptop computer": "laptop", "Computer keyboard": "keyboard",
-    "Computer mouse": "mouse", "Mobile phone": "phone",
-    "Cellular telephone": "phone", "Telephone": "phone",
-    "Television": "TV", "Drink": "beverage",
+    # --- US currency normalization ---
+    "one-front":     "one dollar bill",
+    "one-back":      "one dollar bill",
+    "five-front":    "five dollar bill",
+    "five-back":     "five dollar bill",
+    "ten-front":     "ten dollar bill",
+    "ten-back":      "ten dollar bill",
+    "twenty-front":  "twenty dollar bill",
+    "twenty-back":   "twenty dollar bill",
+    "fifty-front":   "fifty dollar bill",
+    "fifty-back":    "fifty dollar bill",
+    "hundred-front": "hundred dollar bill",
+    "hundred-back":  "hundred dollar bill",
+    # "Human face": "person", "Man": "person", "Woman": "person",
+    # "Boy": "person", "Girl": "person", "Person": "person",
+    # "Laptop computer": "laptop", "Computer keyboard": "keyboard",
+    # "Computer mouse": "mouse", "Mobile phone": "phone",
+    # "Cellular telephone": "phone", "Telephone": "phone",
+    # "Television": "TV", "Drink": "beverage",
 }
 
 # Priority objects
