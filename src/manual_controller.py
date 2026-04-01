@@ -173,6 +173,10 @@ class MainController:
     def _remove_unk(self, s: str) -> str:
         return s.replace("[unk]", "").strip()
     
+    # helper to replace Vosk's unknown token in voice input results with a provided string.
+    def _replace_unk(self, s: str, rep: str) -> str:
+        return s.replace("[unk]", rep).strip()
+    
     # helper to extract object names from the transcript for commands.
     def _extract_objs_from_transcript(self, transcript: str) -> list[str]:
         objs_to_process = set()
@@ -269,9 +273,10 @@ class MainController:
             
             voice_input_state = voice_input_result[0]
             transcript = voice_input_result[1]
+            unk_to_unsupported_word = self._replace_unk(transcript, "[unsupported word]")
             match voice_input_state:
                 case VoiceInputState.WAITING_FOR_WAKE_WORD:
-                    print(f"🎙️ Wake word input: '{transcript}'")  # Debug print for wake word input
+                    print(f"🎙️ Wake word input: '{unk_to_unsupported_word}'")  # Debug print for wake word input
                     
                     if 'vision' in transcript:  # if the user said the wake word, we start the processing pipeline.
                         self.speech_queue.put("I'm listening!")
@@ -280,7 +285,7 @@ class MainController:
                         # before processing the command, go back to waiting for the wake word, because right now this is always what we want.
                         self.voice_input_state_q.put(VoiceInputState.WAITING_FOR_WAKE_WORD) 
 
-                        print(f"🎙️ Heard command: '{transcript}'")
+                        print(f"🎙️ Heard command: '{unk_to_unsupported_word}'")
                         
                         # continue if we didn't get any transcript
                         if not transcript:
@@ -289,11 +294,8 @@ class MainController:
                             self.speech_queue.put("I didn't hear a command.")
                             continue
                         
-                        # if we got a transcript, print it out for debugging and then clean it up by removing any "[unk]" tokens that Vosk might have included for unrecognized words.
-                        print(f"🎙️ Heard: {transcript}")
-
                         cleaned_transcript = self._remove_unk(transcript)
-                        print(f"🎙️ Cleaned transcript: {cleaned_transcript}")
+                        # print(f"🎙️ Cleaned transcript: {cleaned_transcript}")
 
                         # if after cleaning the transcript is empty, that means we didn't recognize any valid command words, so we should continue...
                         if not cleaned_transcript:
