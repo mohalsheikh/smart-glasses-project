@@ -133,7 +133,15 @@ class MainController:
                     self._print_ocr_feedback(det) # print OCR feedback for each detected object in a readable format
                     detections[i] = [d for d in det if d.get("ocr_text") is not None] # filter to just objects with text for description
 
-                description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections of objects with text in natural language
+                text_detections = [det for det in detections if det.get("ocr_text")] # filter to just objects with text
+
+                if not text_detections:
+                    if detections:
+                        description = "I found objects, but I couldn't read any text."
+                    else:
+                        description = "I don't see anything to read."
+                else:
+                    description = summarize_detections(text_detections, frame_width=self.camera_frame_width) # describe detections of objects with text in natural language
 ##############################################################################################################
 # # Quit commands
 ##############################################################################################################       

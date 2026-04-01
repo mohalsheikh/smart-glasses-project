@@ -6,6 +6,12 @@ Created by Ethan
 import cv2 as cv
 import numpy as np
 
+# Enhance contrast using CLAHE (Contrast Limited Adaptive Histogram Equalization).
+def enhance_contrast_clahe(image):
+    gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+    clahe = cv.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    return cv.cvtColor(clahe.apply(gray), cv.COLOR_GRAY2BGR)
+
 # Convert a BGR image to grayscale.
 def bgr_to_gray(image):
     return cv.cvtColor(image, cv.COLOR_BGR2GRAY)
