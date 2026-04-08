@@ -127,10 +127,10 @@ class MainController:
                 description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections in natural language 
             case "read": 
                 detections, final_frames = self.detector.detect(frames, annotate=True, objects=objs) # detect objects and get annotated frame
-                detections = [self.ocr.attach_crop_text_to_detected_objects(frames[i], det) for i, det in enumerate(detections)] # read text on objects
+                detections = [self.ocr.attach_crop_text_to_detected_objects(frames[i], i, det) for i, det in enumerate(detections)] # read text on objects
 
                 for i, det in enumerate(detections): 
-                    self._print_ocr_feedback(det) # print OCR feedback for each detected object in a readable format
+                    self._print_ocr_feedback(i, det) # print OCR feedback for each detected object in a readable format
                     detections[i] = [d for d in det if d.get("ocr_text") is not None] # filter to just objects with text for description
 
                 description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections of objects with text in natural language
@@ -189,20 +189,21 @@ class MainController:
         return list(objs_to_process)
     
     # helper to print OCR feedback for each detected object in a readable format.
-    def _print_ocr_feedback(self, detections):
+    def _print_ocr_feedback(self, frame_num: int, detections):
         # =========================================================================================
         # TEST: Per-object OCR attachment
         # =========================================================================================
         try:
             print()
-            print("ℹ️  Per-object OCR attachment results ℹ️")
+            print(f"ℹ️  Per-object OCR attachment results for frame {frame_num} ℹ️")
             print("====================================================")
 
-            for i, det in enumerate(detections):
+            for det in detections:
                 # Extract Values
                 label = det.get("label")
                 confidence = det.get("confidence")
                 bbox = det.get("bbox")
+                track_id = det.get("track_id")
                 ocr_text = det.get("ocr_text")
                 # Format confidence (round to 2 decimals)
                 confidence_str = f"{float(confidence):.2f}" if confidence is not None else "n/a"
@@ -220,7 +221,7 @@ class MainController:
                 # Format label (strip whitespace, show n/a if empty)
                 label_str = str(label).strip() if label else "n/a"
                 # Output Results with Formtting 
-                print(f" ID [{i:02d}]")
+                print(f" ID [{track_id}]")
                 print(f"   Label:         {label_str}")
                 print(f"   Conf:          {confidence_str}")
                 print(f"   BBox:          {bbox_str}")

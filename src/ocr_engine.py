@@ -116,21 +116,21 @@ class OCREngine:
         for i, candidate in enumerate(preprocessing.deskew_image(image), start=1):
             results = self._extract_text(candidate)
             filtered = self._filter_and_sort_results(results, min_conf)
-            print(f"[OCR] deskew candidate {i}: raw={len(results)} filtered={len(filtered)}")
             if not filtered:
+                print(f"\t[OCR] deskew candidate {i}: no text results")
                 continue
             # Uses confidence helper to score
             metrics = self._annotate_confidence(filtered)  # avg_conf, min_conf, count
             text = self._join_text(filtered)
             score = metrics["count"] + metrics["avg_conf"]
-            print(f"[OCR] candidate {i} score={score:.3f} text: {text}")
+            print(f"\t[OCR] deskew candidate {i}: score={score:.3f}, text: {text}")
             if score > best_score:
                 best_score = score
                 best_text = text
                 best_avg_conf = metrics["avg_conf"]
         if best_text:
             return best_text, best_avg_conf
-        print("[OCR] no candidates produced filtered text")
+        print("\t\t[OCR] no candidates produced filtered text")
         return None, 0.0
 ############################################################################################
     def extract_text_with_confidence(self, image: np.ndarray, min_conf: float = DEFAULT_MIN_CONFIDENCE) -> Dict[str, Any]:
@@ -163,7 +163,7 @@ class OCREngine:
             "count": conf_metrics["count"]
         }
 ############################################################################################
-    def attach_crop_text_to_detected_objects(self, frame: np.ndarray, detections: List[Dict[str, Any]], min_conf: float = DEFAULT_MIN_CONFIDENCE) -> List[Dict[str, Any]]:
+    def attach_crop_text_to_detected_objects(self, frame: np.ndarray, frame_num: int, detections: List[Dict[str, Any]], min_conf: float = DEFAULT_MIN_CONFIDENCE) -> List[Dict[str, Any]]:
         """
         For each detected object's bounding-box crop, attaches the extracted
         text to the detection dictionary using the "ocr_text" field.
@@ -180,6 +180,7 @@ class OCREngine:
 
             # runs OCR on the crop and gets the extracted text as a string.
             # if the crop has text that meets the min_conf threshold, it is added to the detection dict under the "ocr_text" key.
+            print(f"[OCR] Attempting text extraction of object {det.get("track_id")} in frame {frame_num}")
             text_extraction, avg_conf = self.extract_text_as_string(crop, min_conf=min_conf)
             if text_extraction is not None:
                 det["ocr_text"] = text_extraction
