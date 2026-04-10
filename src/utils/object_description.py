@@ -3,7 +3,7 @@
 
 from enum import Enum
 from typing import Counter, List, Dict, Any, Optional
-import src.utils.config as config
+from src.utils.config import Direction
 import inflect
 
 _inflect = inflect.engine()
@@ -62,10 +62,10 @@ PRIORITY_LABELS = {
     "Toilet", "Sink", "Bed", "Couch"
 }
 
-class Direction(Enum):
-    LEFT = 1
-    FRONT = 2
-    RIGHT = 3
+# class Direction(Enum):
+#     LEFT = 1
+#     FRONT = 2
+#     RIGHT = 3
 
 def normalize_label(label: str) -> Optional[str]:
     """

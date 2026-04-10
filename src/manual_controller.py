@@ -16,8 +16,8 @@ from src.object_detector import ObjectDetector
 from src.ocr_engine import OCREngine
 from src.speech_engine import SpeechEngine
 from src.voice_input import VoiceInput
+from src.utils.config import Direction, STRING_TO_DIRECTION
 
-import src.utils.config as config
 from src.utils.object_description import summarize_detections, format_ocr_feedback, normalize_label
 
 import threading
@@ -116,17 +116,17 @@ class MainController:
 
     # determines action to take based on the value of command, and returns a natural language description of the result to be spoken to the user.
     # objs is the list of objects that we want to process. If it is none, we are processing all objects that the ObjectDetector knows.
-    def _route_command(self, command: str, cleaned_transcript: str, frames: list[np.ndarray], prev_desc: str, objs: list[str] = None):
+    def _route_command(self, command: str, cleaned_transcript: str, working_transcript: str, frames: list[np.ndarray], prev_desc: str, objs: list[str] = None, direction: Direction = None):
         final_frames = None
         match command:
 ##############################################################################################################
 # # Action commands
 ##############################################################################################################  
             case "detect":
-                detections, final_frames = self.detector.detect(frames, annotate=True, objects=objs) # detect objects and get annotated frame
+                detections, final_frames = self.detector.detect(frames, annotate=True, objects=objs, direction=direction) # detect objects and get annotated frame
                 description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections in natural language 
             case "read": 
-                detections, final_frames = self.detector.detect(frames, annotate=True, objects=objs) # detect objects and get annotated frame
+                detections, final_frames = self.detector.detect(frames, annotate=True, objects=objs, direction=direction) # detect objects and get annotated frame
                 detections = [self.ocr.attach_crop_text_to_detected_objects(frames[i], i, det) for i, det in enumerate(detections)] # read text on objects
 
                 for i, det in enumerate(detections): 
@@ -134,6 +134,19 @@ class MainController:
                     detections[i] = [d for d in det if d.get("ocr_text") is not None] # filter to just objects with text for description
 
                 description = summarize_detections(detections, frame_width=self.camera_frame_width) # describe detections of objects with text in natural language
+##############################################################################################################
+# # Directional commands
+##############################################################################################################                  
+            case "left" | "front" | "right":
+                if direction is not None:
+                    # print("DIRECTION WAS NOT NONE")
+                    description, final_frames = self._routing_error(transcript=cleaned_transcript)
+                else:
+                    new_command = working_transcript.split()[-2]
+                    index_of_direction = working_transcript.rfind(command)
+                    working_transcript = working_transcript[:index_of_direction].strip()
+                    # print(f"Got direction {command}. working transcript: {working_transcript}")
+                    description, final_frames = self._route_command(new_command, cleaned_transcript, working_transcript, frames, prev_desc, objs=objs, direction=STRING_TO_DIRECTION[command])
 ##############################################################################################################
 # # Quit commands
 ##############################################################################################################       
@@ -151,20 +164,32 @@ class MainController:
 ############################################################################################################## 
             case _:
                 # if this happens we assume the user wants to detect/read specific objects mentioned in the command.
-                
-                # find the index of the command word in the transcript so that we can extract the part of the transcript after the command word, which should contain the object names that the user wants to deal with.
-                index_of_command = max([cleaned_transcript.rfind(cmd) for cmd in self.commands])
-                transcript_with_command = cleaned_transcript[index_of_command:]
-                
-                # extract object names from the part of the transcript after the command word. 
-                objs_to_process = self._extract_objs_from_transcript(transcript_with_command)
 
-                command = transcript_with_command.split()[0]
-                if command in self.commands and not len(objs_to_process) == 0: 
-                    description, final_frames = self._route_command(command, cleaned_transcript, frames, prev_desc, objs=objs_to_process) # recursively call _route_command with the specific objects to process. 
+                if objs is not None:
+                    # print("OBJS WAS NOT NONE")
+                    description, final_frames = self._routing_error(transcript=cleaned_transcript)
                 else:
-                    description = f"Sorry, I didn't understand the command. I heard '{cleaned_transcript}'."
-                    final_frames = None # frames.copy() if frames is not None else None
+                    # find the index of the command word in the transcript so that we can extract the part of the transcript after the command word, which should contain the object names that the user wants to deal with.
+                    index_of_command = max([working_transcript.rfind(cmd) for cmd in self.commands])
+                    transcript_with_command = working_transcript[index_of_command:]
+                    
+                    # extract object names from the part of the transcript after the command word. 
+                    objs_to_process, transcript_without_objects = self._extract_objs_from_transcript(transcript_with_command)
+
+                    command = transcript_without_objects.split()[-1]
+                    working_transcript = working_transcript[:(index_of_command + len(command))]
+                    # print(f"Got command {command} and objs {objs_to_process}. working transcript: {working_transcript}")
+                    if command in self.commands and not len(objs_to_process) == 0: 
+                        description, final_frames = self._route_command(command, cleaned_transcript, working_transcript, frames, prev_desc, objs=objs_to_process, direction=direction) # recursively call _route_command with the specific objects to process. 
+                    else:
+                        # print(f"no object to process, or unusable command")
+                        description, final_frames = self._routing_error(transcript=cleaned_transcript)
+
+        return description, final_frames
+    
+    def _routing_error(self, transcript: str):
+        description = f"Sorry, I didn't understand the command. I heard '{transcript}'."
+        final_frames = None # frames.copy() if frames is not None else None
 
         return description, final_frames
 
@@ -178,7 +203,7 @@ class MainController:
         return s.replace("[unk]", rep).strip()
     
     # helper to extract object names from the transcript for commands.
-    def _extract_objs_from_transcript(self, transcript: str) -> list[str]:
+    def _extract_objs_from_transcript(self, transcript: str):
         objs_to_process = set()
 
         for class_name in self.class_names:
@@ -186,7 +211,7 @@ class MainController:
                 objs_to_process.add(class_name)
                 transcript = transcript.replace(class_name, "") # remove the class name from the transcript so that we can check for command words without the class names in the way
 
-        return list(objs_to_process)
+        return list(objs_to_process), transcript.strip()
     
     # helper to print OCR feedback for each detected object in a readable format.
     def _print_ocr_feedback(self, frame_num: int, detections):
@@ -309,7 +334,7 @@ class MainController:
                         split_transcript = cleaned_transcript.split()
                         last_word = split_transcript[-1] # We assume the command is the last_word in the cleaned transcript... if it isn't, it is likely an object name that the user wants to detect/read.
 
-                        results = self._route_command(last_word, cleaned_transcript, frames, description)
+                        results = self._route_command(last_word, cleaned_transcript, cleaned_transcript + "", frames, description)
                         description = results[0]
                         annotated_frames = results[1] if results[1] is not None else annotated_frames # only updating frames if frames result from route command isn't None (i.e. if no new detections were called for).
         

@@ -6,11 +6,11 @@ Multi-model support added by Mohammed
 """
 
 from ultralytics import YOLO
-from src.utils.config import DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT
+from src.utils.config import DEFAULT_FRAME_WIDTH, DEFAULT_FRAME_HEIGHT, Direction
 import numpy as np
 import cv2 as cv
 from typing import List, Dict, Tuple, Optional
-from src.utils.object_description import normalize_label
+from src.utils.object_description import normalize_label, direction_from_center
 
 
 class ObjectDetector:
@@ -167,7 +167,8 @@ class ObjectDetector:
         self,
         frames: list[np.ndarray],
         annotate: bool = False,
-        objects: list[str] = None
+        objects: list[str] = None,
+        direction: Direction = None
     ) -> Tuple[List[Dict], np.ndarray]:
         """
         Run all loaded models on *frame*, merge detections, and return them.
@@ -219,21 +220,26 @@ class ObjectDetector:
                 for j in range(len(xyxy)):
                     valid_id = ids is not None and j < len(ids)
 
-                    if len(frames) == 1 or valid_id:
+                    # saved for output
+                    label = labels[j]
+                    confidence = conf[j]
+                    obj_direction = direction_from_center(tuple(center[j]), DEFAULT_FRAME_WIDTH)
+                    bbox = tuple(xyxy[j])
+                    track_id = f"{model_idx}.{int(ids[j])}" if valid_id else "N/A"
+
+                    if (direction is None or obj_direction == direction) and (len(frames) == 1 or valid_id):
                         all_detections[i].append(
                             {
-                                "label": labels[j],
-                                "confidence": conf[j],
-                                "bbox": tuple(xyxy[j]),
+                                "label": label,
+                                "confidence": confidence,
+                                "bbox": bbox,
                                 "center": tuple(center[j]),
-                                "track_id": f"{model_idx}.{int(ids[j])}" if valid_id else "N/A",
+                                "track_id": track_id,
                                 "model_index": model_idx,
                             }
                         )
 
-                        print(f"[ObjectDetector] Model {model_idx} detected {labels[j]} with confidence {conf[j]:.2f} at {xyxy[j]} (track_id: {all_detections[i][-1]['track_id']})")
-                    else:
-                        print(f"[ObjectDetector] Model {model_idx} detected {labels[j]} with confidence {conf[j]:.2f} at {xyxy[j]} (track_id: N/A)")
+                    print(f"[ObjectDetector] Model {model_idx} detected {label} with confidence {confidence:.2f} at {[int(coord) for coord in bbox]} ({obj_direction}, track_id: {track_id})")
                 
             # reset model to reset track ids for next detection run
             model = YOLO(self.paths[model_idx])
