@@ -75,7 +75,10 @@ class MainController:
         self.voice_input_state_q = Queue() # queue for state of voice input thread (waiting for wake word or waiting for command)
 
         self.tutorial_file = Path("tutorial.txt")
+        self.commands_tutorial_primary_file = Path("commands_user_facing.txt")
+        self.commands_tutorial_secondary_file = Path("commands_directional_exit.txt")
         self.play_startup_tutorial = True
+        self.awaiting_extended_commands_choice = False
 
         print("⚡ MANUAL Smart Glasses System Initialized")
 
@@ -142,6 +145,33 @@ class MainController:
         print("🔊 Playing startup tutorial...")
         self.speech.speak(tutorial_text)
 
+    def _load_text_file(self, file_path: Path, label: str) -> str:
+        try:
+            if not file_path.exists():
+                print(f"[{label}] File not found: {file_path}")
+                return ""
+            return file_path.read_text(encoding="utf-8").strip()
+        except Exception as e:
+            print(f"[{label} ERROR] {type(e).__name__}: {e}")
+            return ""
+
+    def _build_commands_tutorial_intro(self) -> str:
+        primary_text = self._load_text_file(self.commands_tutorial_primary_file, "Commands Tutorial")
+        if not primary_text:
+            primary_text = "I could not find the commands tutorial file."
+
+        prompt = " Would you like to hear the directional and exit command guide? Say yes or no."
+        return f"{primary_text}{prompt}"
+
+    def _route_commands_tutorial_followup(self, transcript: str) -> str:
+        words = transcript.split()
+        if "yes" in words:
+            secondary_text = self._load_text_file(self.commands_tutorial_secondary_file, "Commands Tutorial")
+            if secondary_text:
+                return secondary_text
+            return "I could not find the advanced commands tutorial file."
+        return "Okay. I will skip the directional and exit command guide."
+
     # determines action to take based on the value of command, and returns a natural language description of the result to be spoken to the user.
     # objs is the list of objects that we want to process. If it is none, we are processing all objects that the ObjectDetector knows.
     def _route_command(self, command: str, cleaned_transcript: str, working_transcript: str, frames: list[np.ndarray], prev_desc: str, objs: list[str] = None, direction: Direction = None):
@@ -187,6 +217,13 @@ class MainController:
             case "repeat":
                 description = prev_desc
                 final_frames = None # frames.copy() if frames is not None else None
+##############################################################################################################
+# # Tutorial commands
+##############################################################################################################
+            case "commands" | "command" | "help":
+                self.awaiting_extended_commands_choice = True
+                description = self._build_commands_tutorial_intro()
+                final_frames = None
 ##############################################################################################################
 # # Default
 ############################################################################################################## 
@@ -357,6 +394,13 @@ class MainController:
                             print("🎙️ Command not recognized. Try again.")
                             # self.speech.speak("Sorry, I didn't catch that.")
                             self.speech_queue.put("Sorry, I didn't catch that.")
+                            continue
+
+                        if self.awaiting_extended_commands_choice:
+                            self.awaiting_extended_commands_choice = False
+                            follow_up_description = self._route_commands_tutorial_followup(cleaned_transcript)
+                            self.speech_queue.put(follow_up_description)
+                            print(f"Output: {follow_up_description}")
                             continue
 
                         # command routing determines what action to take based on the transcript.

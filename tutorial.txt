@@ -5,7 +5,9 @@ Say the wake word, then say a command.
 Available commands:
 Detect: describes nearby objects.
 Read: reads visible text.
+Say commands, command, or help to hear the full command guide.
 
 Example:
 Say, Vision detect.
 Or say, Vision read.
+Or say, Vision help.

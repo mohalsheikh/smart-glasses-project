@@ -1,0 +1,10 @@
+Available user-facing commands:
+Detect: describes nearby objects.
+Read: reads visible text.
+Repeat: repeats the last response.
+Commands or help: reads this command guide.
+
+Example phrases:
+Vision detect.
+Vision read.
+Vision help.

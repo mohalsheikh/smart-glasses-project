@@ -1,0 +1,6 @@
+Directional command guide:
+You can add left, front, or right after detect or read.
+Examples: detect left. Read right.
+
+Exit command guide:
+Sleep, end, nevermind, or thanks sends the system back to wake-word mode.
