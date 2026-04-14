@@ -25,6 +25,7 @@ from queue import Queue
 from collections import deque
 import numpy as np
 import enum
+from pathlib import Path
 
 FRAME_COUNT = 3 # the number of frames provided to objectdetector and ocrengine for detection and reading.
 
@@ -73,6 +74,9 @@ class MainController:
         self.voice_input_result_q = Queue() # queue for results from voice input thread
         self.voice_input_state_q = Queue() # queue for state of voice input thread (waiting for wake word or waiting for command)
 
+        self.tutorial_file = Path("tutorial.txt")
+        self.play_startup_tutorial = True
+
         print("⚡ MANUAL Smart Glasses System Initialized")
 
     # thread for speech output tasks, in parallel with the main loop.
@@ -113,6 +117,30 @@ class MainController:
 
         tts_thread.start()
         voice_input_thread.start()
+
+    def _load_tutorial_text(self) -> str:
+        try:
+            if not self.play_startup_tutorial:
+                return ""
+
+            if not self.tutorial_file.exists():
+                print(f"[Tutorial] File not found: {self.tutorial_file}")
+                return ""
+
+            return self.tutorial_file.read_text(encoding="utf-8").strip()
+
+        except Exception as e:
+            print(f"[Tutorial ERROR] {type(e).__name__}: {e}")
+            return ""
+            
+    def _play_startup_tutorial(self) -> None:
+        tutorial_text = self._load_tutorial_text()
+
+        if not tutorial_text:
+            return
+
+        print("🔊 Playing startup tutorial...")
+        self.speech.speak(tutorial_text)
 
     # determines action to take based on the value of command, and returns a natural language description of the result to be spoken to the user.
     # objs is the list of objects that we want to process. If it is none, we are processing all objects that the ObjectDetector knows.
@@ -276,6 +304,7 @@ class MainController:
 
         annotated_frames_index = 0 # index of the annotated frame to show in the detections window
 
+        self._play_startup_tutorial()
         self._start_worker_threads() # start the display and speech worker threads
         description = "I have nothing to repeat." # used to store spoken descriptions, saved across loops to support the "repeat" command.
 
@@ -340,30 +369,3 @@ class MainController:
         
                         self.speech_queue.put(description)
                         print(f"Output: {description}")
-
-            # wake_word_input = self.voice.listen_wake_word(timeout_seconds=8.0)
-            # print(f"Wake word input: '{wake_word_input}'")  # Debug print for wake word input
-
-            # if 'vision' in wake_word_input:  # if the user said the wake word, we start the processing pipeline.
-            #     # self.speech.speak("I'm listening!")
-            #     self.speech_queue.put("I'm listening!")
-
-            #     # first, the camera handler obtains a frame from the camera...
-            #     frame = self.camera.capture_frame() 
-            #     if frame is None:
-            #         # continue to the next iteration of the loop if we didn't get a frame
-            #         print("⚠️ No frame from camera.")
-            #         continue
-
-            #     # listen for voice input from the user.
-            #     try:
-            #         transcript = self.voice.listen_command()
-            #     except Exception as e:
-            #         print(f"[VoiceInput ERROR] {type(e).__name__}: {e}")
-            #         raise e
-
-           
-            
-            # if annotated_frame is not None:
-            #     print("Displaying annotated frame.")
-            #     self.camera.show_image(annotated_frame) # just keep showing the last frame so that the window doesn't say not responding.

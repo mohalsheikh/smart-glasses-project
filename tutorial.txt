@@ -1,0 +1,11 @@
+Welcome to Smart Glasses.
+This system helps describe your surroundings out loud.
+
+Say the wake word, then say a command.
+Available commands:
+Detect: describes nearby objects.
+Read: reads visible text.
+
+Example:
+Say, Vision detect.
+Or say, Vision read.
