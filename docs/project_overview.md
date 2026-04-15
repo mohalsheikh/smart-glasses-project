@@ -1,83 +1,143 @@
 # Smart Glasses Project Overview
 
-## Purpose
-Assistive real-time vision pipeline for visually impaired users. The system listens for a wake word and command, captures camera frames, detects objects/currency, optionally reads text on detections, and speaks a natural-language response.
+## Project Goal
 
-## Active Runtime Architecture
-Current executable path:
+Provide an offline-capable assistive vision workflow for visually impaired users by combining:
 
-1. `main.py` creates `MainController` and starts the app loop.
-2. `src/manual_controller.py` orchestrates camera capture, voice state machine, command routing, detection/OCR calls, and speech output.
-3. Worker threads:
-   - TTS worker: dequeues text and calls `src/speech_engine.py`.
-   - Voice worker: listens for wake word/command via `src/voice_input.py`.
-4. Per command:
-   - `detect`: `src/object_detector.py` runs YOLO tracking across recent frames.
-   - `read`: detection first, then `src/ocr_engine.py` OCR on detected crops.
-5. `src/utils/object_description.py` normalizes labels and summarizes detections into spoken output.
-6. `src/camera_handler.py` handles OpenCV capture/display and input key checks.
+- spoken interaction (wake word + commands)
+- real-time object detection
+- OCR on detected objects
+- spoken natural-language scene feedback
 
-## Active Project Structure (Concise)
+## Current Runtime State
+
+The active executable path is manual command-driven mode:
+
+1. `main.py` instantiates `MainController` and starts the main loop.
+2. `src/manual_controller.py` owns the runtime state machine and orchestration.
+
+Key behavior currently active:
+
+- Wake word is `vision`.
+- Commands are processed after wake word detection.
+- A rolling 3-frame buffer is used for detection/OCR commands.
+- Two windows are displayed: live camera feed + last annotated detections.
+- `q` key exits the app.
+
+## Runtime Architecture
+
+### Core control flow
+
+1. Camera frames are continuously captured via `src/camera_handler.py`.
+2. Voice input worker thread listens using Vosk through `src/voice_input.py`.
+3. TTS worker thread speaks queued responses via `src/speech_engine.py`.
+4. Main thread routes command text in `src/manual_controller.py`.
+
+### Command execution paths
+
+- `detect`
+  - Runs `src/object_detector.py` on the recent frame buffer.
+  - Uses multi-model YOLO loading (currently `yolov8n.pt` and `currency_detector.pt`).
+  - Produces merged detections and optional annotations.
+
+- `read`
+  - Runs detection first.
+  - Runs `src/ocr_engine.py` on each detected crop.
+  - Attaches OCR text per detection when confidence filtering passes.
+
+### Summarization and language shaping
+
+`src/utils/object_description.py`:
+
+- normalizes labels (including currency front/back label merging)
+- applies confidence thresholds by object category
+- condenses repeated track IDs across frame history
+- generates natural language with directional phrasing (left/front/right)
+
+## Active Command Surface
+
+- Actions: `detect`, `read`
+- Direction modifiers: `left`, `front`, `right`
+- Session controls: `sleep`, `end`, `nevermind`, `thanks`, `repeat`
+- Help/tutorial: `commands`, `command`, `help`, `yes`, `no`
+
+The help flow can read:
+
+- `commands_user_facing.txt`
+- `commands_directional_exit.txt` (optional follow-up if user says yes)
+
+## Project Structure (Current, Concise)
 
 ```text
 smart-glasses-project/
-├── main.py                          # entrypoint (manual mode)
-├── requirements.txt                 # pinned environment (broad lockfile)
-├── yolov8n.pt                       # general object model
-├── currency_detector.pt             # custom currency model
-├── vosk-model-small-en-us-0.15/     # offline speech recognition model
+├── main.py
+├── requirements.txt
+├── tutorial.txt
+├── commands_user_facing.txt
+├── commands_directional_exit.txt
+├── yolov8n.pt
+├── currency_detector.pt
+├── vosk-model-small-en-us-0.15/
+├── docs/
+│   ├── project_overview.md
+│   ├── setup_guide.md
+│   ├── user_manual.md
+│   └── api_reference.md
 ├── src/
-│   ├── manual_controller.py         # runtime orchestrator (active)
-│   ├── camera_handler.py            # camera I/O and display
-│   ├── object_detector.py           # multi-model YOLO detection/tracking
-│   ├── ocr_engine.py                # EasyOCR over object crops
-│   ├── voice_input.py               # Vosk + sounddevice command input
-│   ├── speech_engine.py             # pyttsx3 text-to-speech
-│   ├── currency_recognizer.py       # legacy/optional component (not in active flow)
+│   ├── manual_controller.py
+│   ├── camera_handler.py
+│   ├── object_detector.py
+│   ├── ocr_engine.py
+│   ├── voice_input.py
+│   ├── speech_engine.py
+│   ├── currency_recognizer.py
 │   └── utils/
-│       ├── config.py                # camera defaults + direction enum
-│       ├── object_description.py    # label normalization + summaries
-│       └── preprocessing.py         # OCR helper preprocessing
-├── tests/                           # tests/experiments
-├── tests_Eric/                      # OCR/object-detection experiments
-└── training/                        # model training pipeline (separate from runtime)
+│       ├── config.py
+│       ├── object_description.py
+│       ├── preprocessing.py
+│       └── logger.py
+└── training/
 ```
 
-## What Is Not in Active Runtime
-The following are present but not part of the current main execution path:
+## Components Not In Active Runtime Path
 
-- `src/ocr_engine2.py`
-- files under `tests_Eric/`
-- most files under `tests/` (used for testing, not app runtime)
-- `training/` pipeline files (used to train/export models, not run inference app)
+- `src/currency_recognizer.py` exists but is not currently used by `main.py` + `manual_controller.py`.
+- `training/` is a separate model training/export workflow.
+- Other top-level assets like alternate YOLO weights (`yolov8n-oiv7.pt`, `yolov8s-oiv7.pt`) are present but not loaded by default runtime.
 
-## Project Requirements
+## Requirements
 
-### Runtime software requirements (active app)
-- Python 3.10+ (recommended)
-- OpenCV (`opencv-python`)
-- NumPy (`numpy`)
-- Ultralytics YOLO (`ultralytics`)
-- EasyOCR (`easyocr`)
-- Text-to-speech (`pyttsx3`)
-- Offline speech recognition (`vosk`)
-- Microphone input (`sounddevice`)
-- Label formatting (`inflect`)
+### Runtime software
 
-### Runtime assets required
-- YOLO model files at project root:
-  - `yolov8n.pt`
-  - `currency_detector.pt`
-- Vosk model directory:
-  - `vosk-model-small-en-us-0.15/` (must contain `am/`, `conf/`, `graph/`)
+- Python 3.10+
+- `opencv-python`
+- `numpy`
+- `ultralytics`
+- `torch`, `torchvision`
+- `easyocr`
+- `pyttsx3`
+- `vosk`
+- `sounddevice`
+- `inflect`
 
-### Hardware requirements
-- Webcam accessible by OpenCV
-- Microphone for wake word and command input
-- Speakers/headphones for spoken output
+### Runtime model/assets
 
-### Notes on requirements.txt
-`requirements.txt` is a broad pinned lockfile and includes many platform-specific packages (for example, many macOS `pyobjc*` packages). For this Windows project runtime, the core requirement set above reflects the actual active dependency surface.
+- `yolov8n.pt` at project root
+- `currency_detector.pt` at project root
+- `vosk-model-small-en-us-0.15/` at project root with subfolders:
+  - `am/`
+  - `conf/`
+  - `graph/`
 
-### Training requirements (separate workflow)
-`training/requirements.txt` defines model-training dependencies (Roboflow, pandas, onnx, etc.) used only for training/export, not for normal runtime inference.
+### Hardware
+
+- Webcam
+- Microphone
+- Speaker/headphones
+
+## Dependency Notes
+
+- `requirements.txt` is a broad pinned lockfile.
+- It includes packages not required for all platforms (for example macOS `pyobjc*` packages).
+- For Windows runtime, the core dependency surface is the set listed above.
+- Current code imports `vosk`, `sounddevice`, and `inflect`, but these are not pinned in the present root `requirements.txt` and may need manual installation.
