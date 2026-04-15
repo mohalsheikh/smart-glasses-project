@@ -1,0 +1,26 @@
+# ASL Sign Language Training Requirements
+# Install: pip install -r requirements.txt
+
+# Core ML
+torch>=2.0.0
+torchvision>=0.15.0
+numpy>=1.24.0
+
+# Hand Detection
+mediapipe>=0.10.0
+opencv-python>=4.8.0
+
+# Data Processing
+tqdm>=4.65.0
+Pillow>=9.5.0
+
+# Optional: ONNX export for Pi deployment
+onnx>=1.14.0
+onnxruntime>=1.15.0
+
+# Optional: Kaggle dataset download
+kaggle>=1.5.0
+
+# Optional: Experiment tracking
+# wandb>=0.15.0
+# tensorboard>=2.13.0

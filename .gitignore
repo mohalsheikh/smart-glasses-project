@@ -1,0 +1,56 @@
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.env
+
+.DS_Store
+.vscode/
+.idea/
+
+*.log
+tmp/
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+
+# Virtual envs
+venv/
+.venv/
+venv311/
+
+# Secrets / local
+.env
+.DS_Store
+
+# Virtual envs
+venv311/
+.venv/
+venv/
+
+.venv311/
+venv311/
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.dat
+*.lm.bin
+*.zip
+telemetry/runs/
+src/telemetry/runs/

@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Glasses Telemetry Dashboard</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-card: #334155;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-blue: #3b82f6;
+            --accent-green: #22c55e;
+            --accent-yellow: #eab308;
+            --accent-red: #ef4444;
+            --accent-purple: #a855f7;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            text-align: center;
+            padding: 30px 0;
+            border-bottom: 1px solid var(--bg-card);
+            margin-bottom: 30px;
+        }
+        
+        header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        
+        header .subtitle {
+            color: var(--text-secondary);
+            font-size: 1.1rem;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .stat-card .icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+        
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--accent-blue);
+        }
+        
+        .stat-card .label {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 5px;
+        }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        @media (max-width: 1200px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .chart-card {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        
+        .chart-card.full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .chart-card h3 {
+            margin-bottom: 15px;
+            font-size: 1.2rem;
+            color: var(--text-primary);
+        }
+        
+        .chart-container {
+            height: 350px;
+        }
+        
+        .chart-container.tall {
+            height: 450px;
+        }
+        
+        footer {
+            text-align: center;
+            padding: 30px 0;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--bg-card);
+            margin-top: 30px;
+        }
+        
+        .top-labels-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .label-tag {
+            background: var(--bg-card);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+        
+        .label-tag .count {
+            color: var(--accent-green);
+            margin-left: 8px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 Smart Glasses Telemetry</h1>
+            <p class="subtitle">Run: Unknown | Model: Unknown</p>
+        </header>
+        
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="icon">🎬</div>
+                <div class="value">0</div>
+                <div class="label">Total Frames</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">⚡</div>
+                <div class="value">0.0</div>
+                <div class="label">Average FPS</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">⏱️</div>
+                <div class="value">0.0ms</div>
+                <div class="label">Avg Latency</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🎯</div>
+                <div class="value">0.0</div>
+                <div class="label">Avg Detections/Frame</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">📈</div>
+                <div class="value">0%</div>
+                <div class="label">Avg Confidence</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon">🏷️</div>
+                <div class="value">0</div>
+                <div class="label">Unique Objects</div>
+            </div>
+        </div>
+        
+        <div class="charts-grid">
+            <div class="chart-card">
+                <h3>📈 FPS Over Time</h3>
+                <div id="fps-chart" class="chart-container"></div>
+            </div>
+            
+            <div class="chart-card">
+                <h3>⏱️ Processing Latency</h3>
+                <div id="latency-chart" class="chart-container"></div>
+            </div>
+            
+            <div class="chart-card">
+                <h3>🎯 Detections Per Frame</h3>
+                <div id="detections-chart" class="chart-container"></div>
+            </div>
+            
+            <div class="chart-card">
+                <h3>📊 Confidence Distribution</h3>
+                <div id="confidence-chart" class="chart-container"></div>
+            </div>
+            
+            <div class="chart-card full-width">
+                <h3>🏷️ Top Detected Objects</h3>
+                <div id="labels-chart" class="chart-container tall"></div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>Generated by Smart Glasses Telemetry System</p>
+        </footer>
+    </div>
+    
+    <script>
+        // Telemetry Data
+        const frameIndices = [];
+        const fpsValues = [];
+        const loopTotalMs = [];
+        const detectMs = [];
+        const captureMs = [];
+        const nDetections = [];
+        const topConfs = [];
+        const labelCounts = {};
+        
+        // Dark theme for Plotly
+        const darkLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(0,0,0,0)',
+            font: { color: '#f8fafc' },
+            xaxis: {
+                gridcolor: '#334155',
+                zerolinecolor: '#334155'
+            },
+            yaxis: {
+                gridcolor: '#334155',
+                zerolinecolor: '#334155'
+            },
+            margin: { t: 20, r: 20, b: 40, l: 50 }
+        };
+        
+        const config = {
+            responsive: true,
+            displayModeBar: false
+        };
+        
+        // FPS Chart
+        Plotly.newPlot('fps-chart', [{
+            x: frameIndices,
+            y: fpsValues,
+            type: 'scatter',
+            mode: 'lines',
+            line: { color: '#3b82f6', width: 1.5 },
+            name: 'FPS'
+        }, {
+            x: [frameIndices[0], frameIndices[frameIndices.length-1]],
+            y: [0.0, 0.0],
+            type: 'scatter',
+            mode: 'lines',
+            line: { color: '#ef4444', width: 2, dash: 'dash' },
+            name: 'Average'
+        }], {
+            ...darkLayout,
+            xaxis: { ...darkLayout.xaxis, title: 'Frame' },
+            yaxis: { ...darkLayout.yaxis, title: 'FPS', rangemode: 'tozero' },
+            showlegend: true,
+            legend: { x: 1, xanchor: 'right', y: 1 }
+        }, config);
+        
+        // Latency Chart
+        Plotly.newPlot('latency-chart', [{
+            x: frameIndices,
+            y: loopTotalMs,
+            type: 'scatter',
+            mode: 'lines',
+            line: { color: '#a855f7', width: 1.5 },
+            name: 'Total Loop'
+        }, {
+            x: frameIndices,
+            y: detectMs,
+            type: 'scatter',
+            mode: 'lines',
+            line: { color: '#22c55e', width: 1 },
+            name: 'Detection'
+        }, {
+            x: [frameIndices[0], frameIndices[frameIndices.length-1]],
+            y: [33.3, 33.3],
+            type: 'scatter',
+            mode: 'lines',
+            line: { color: '#eab308', width: 2, dash: 'dot' },
+            name: '30 FPS Target'
+        }], {
+            ...darkLayout,
+            xaxis: { ...darkLayout.xaxis, title: 'Frame' },
+            yaxis: { ...darkLayout.yaxis, title: 'Time (ms)' },
+            showlegend: true,
+            legend: { x: 1, xanchor: 'right', y: 1 }
+        }, config);
+        
+        // Detections Chart
+        Plotly.newPlot('detections-chart', [{
+            x: frameIndices,
+            y: nDetections,
+            type: 'bar',
+            marker: { color: '#22c55e', opacity: 0.7 },
+            name: 'Detections'
+        }], {
+            ...darkLayout,
+            xaxis: { ...darkLayout.xaxis, title: 'Frame' },
+            yaxis: { ...darkLayout.yaxis, title: 'Count', rangemode: 'tozero' },
+            bargap: 0
+        }, config);
+        
+        // Confidence Distribution
+        const nonZeroConfs = topConfs.filter(c => c > 0);
+        Plotly.newPlot('confidence-chart', [{
+            x: nonZeroConfs,
+            type: 'histogram',
+            marker: { color: '#3b82f6', opacity: 0.7 },
+            xbins: { start: 0, end: 1, size: 0.05 }
+        }], {
+            ...darkLayout,
+            xaxis: { ...darkLayout.xaxis, title: 'Confidence Score', range: [0, 1] },
+            yaxis: { ...darkLayout.yaxis, title: 'Frequency' },
+            shapes: [{
+                type: 'line',
+                x0: 0.00,
+                x1: 0.00,
+                y0: 0,
+                y1: 1,
+                yref: 'paper',
+                line: { color: '#ef4444', width: 2, dash: 'dash' }
+            }]
+        }, config);
+        
+        // Labels Chart
+        const sortedLabels = Object.entries(labelCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 15);
+        
+        Plotly.newPlot('labels-chart', [{
+            y: sortedLabels.map(l => l[0]),
+            x: sortedLabels.map(l => l[1]),
+            type: 'bar',
+            orientation: 'h',
+            marker: { 
+                color: sortedLabels.map((_, i) => 
+                    `hsl(${200 + i * 10}, 70%, 50%)`
+                )
+            },
+            text: sortedLabels.map(l => l[1].toLocaleString()),
+            textposition: 'outside'
+        }], {
+            ...darkLayout,
+            xaxis: { ...darkLayout.xaxis, title: 'Count' },
+            yaxis: { ...darkLayout.yaxis, autorange: 'reversed' },
+            margin: { t: 20, r: 80, b: 40, l: 120 }
+        }, config);
+    </script>
+</body>
+</html>

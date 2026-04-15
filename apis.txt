@@ -1,0 +1,6 @@
+google maps apis:
+
+1. Routes API: AIzaSyAXvQ-2seKMcJo2b40ZFZeGXCJrwPq576M
+2. Places API: 
+
+new api key: AIzaSyAK0f0ak74ti0Axc0Q901LK1W4wuEZ6BEs
