@@ -1,7 +1,0 @@
-torch==2.2.2
-torchvision==0.17.2
-numpy==1.26.4
-opencv-python==4.11.0.86
-protobuf==4.25.8
-mediapipe==0.10.31
-pydantic==2.12.5
