@@ -9,3 +9,11 @@ __pycache__/
 .venv/
 .env
 .env.example
+
+.env
+.env.example
+.venv/
+
+.env
+.env.example
+.venv/
