@@ -6,3 +6,6 @@ __pycache__/
 *.jpg
 *.zip
 .DS_Store
+.venv/
+.env
+.env.example
