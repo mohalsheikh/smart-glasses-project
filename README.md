@@ -43,24 +43,3 @@ This branch is the online version
 The main branch is the offline version
 Some features will not work unless the needed API keys are added
 Camera, microphone, and audio output may also be needed depending on the feature
-
-Then do this:
-
-```bash
-git checkout online_version
-
-If your actual branch name is with a dash, use:
-
-git checkout online-version
-
-Then update the README, add .env.example, commit, and push:
-
-cat > .env.example << 'EOF'
-OPENAI_API_KEY=your_key_here
-OPENROUTE_API_KEY=your_key_here
-OPENWEATHER_API_KEY=your_key_here
-EOF
-
-git add README.md .env.example
-git commit -m "Update online version README and add env example"
-git push --set-upstream origin online_version
